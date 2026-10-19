@@ -13,7 +13,7 @@
 
 ## 必须遵守
 
-- 详细规则见 `.agent/rules/`，修改相关代码前先读对应文件。
+- 详细规则见 `.agents/rules/`（content-ids、docker、env-and-secrets、migrations），修改相关代码前先读对应文件。
 - 不提交任何 `.env` 文件或密钥。
 - 不删除、不修改已有题目 id。
 - 不编写生产环境依赖 `downgrade` 的迁移。
