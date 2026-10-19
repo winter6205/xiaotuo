@@ -2,8 +2,6 @@
 
 ![小驼](docs/images/banner.png)
 
-<sub>横幅中的 🦙 来自 [Noto Color Emoji](https://github.com/googlefonts/noto-emoji)（SIL Open Font License 1.1）。</sub>
-
 小驼是一个 Agent 学习平台。Agent 调用课程制作 skill，在学习空间里生成互动课程，帮助使用者学习任何主题。仓库只包含平台代码，不含课程内容。
 
 ## 交给你的 Agent
