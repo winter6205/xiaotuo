@@ -15,8 +15,8 @@ uvx xiaotuo start
 把下面的提示词粘贴给 Claude Code、Cursor 或 Codex，替换 `<主题>` 即可让 Agent 部署小驼并制作一门课程：
 
 ```text
-克隆 https://github.com/winter6205/xiaotuo 。克隆是为了拿到课程制作 skill 与校验脚本，
-它们不在发布到 PyPI 的 wheel 里。先阅读仓库根目录的 AGENTS.md，再阅读
+克隆 https://github.com/winter6205/xiaotuo 。克隆是为了拿到课程制作 skill 与内容校验脚本，
+它们只随仓库提供，不包含在安装包中。先阅读仓库根目录的 AGENTS.md，再阅读
 .agents/skills/course-authoring/SKILL.md 及其 references/。
 启动小驼用 `uvx xiaotuo start --courses <课程根目录>`（默认 SQLite，不需要装数据库）。
 然后按该 skill 在仓库外的课程目录中制作一门关于「<主题>」的课程，
@@ -59,7 +59,9 @@ uvx xiaotuo start
 
 ## 安装与运行
 
-免安装直接跑，或者装一次当普通命令用。两种方式都不克隆仓库、不装数据库：wheel 里已带前端产物与示例课程，账号与学习进度写在本机的 SQLite 中。需要 Python 3.12 及以上。
+免安装直接跑，或者装一次当普通命令用：`uvx xiaotuo start` 或 `uv tool install xiaotuo` 只安装学习平台本身，用来浏览和学习课程已经足够。两种方式都不需要克隆仓库、不需要装数据库，账号与学习进度写在本机的 SQLite 中。需要 Python 3.12 及以上。
+
+如需让 Agent 制作或校验课程，请克隆本仓库：课程制作 skill（`.agents/` 下）和内容校验脚本只随仓库提供，不包含在安装包中。
 
 ### 免安装直接跑
 
