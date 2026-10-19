@@ -7,15 +7,22 @@
 
 ## 安装与启动
 
-需要 Python 3.12 及以上。推荐用 [uv](https://docs.astral.sh/uv/) 或 [pipx](https://pipx.pypa.io/)：
+需要 Python 3.12 及以上，推荐用 [uv](https://docs.astral.sh/uv/)：
 
 ```bash
-uvx xiaotuo start                       # 使用随包示例课程
-uvx xiaotuo start --courses ./my-courses
-# 或
-pipx install xiaotuo
-xiaotuo start --courses ./my-courses
+uvx xiaotuo start                       # 免安装试用，使用随包的示例课程
 ```
+
+或者装一次，之后直接当命令用：
+
+```bash
+uv tool install xiaotuo
+xiaotuo start
+```
+
+环境里已有 Python 时，用 [pipx](https://pipx.pypa.io/) 装的是同一个包：`pipx install xiaotuo`。装完提示找不到 `xiaotuo` 命令时，执行一次 `uv tool update-shell`，再重开终端。
+
+学习自己的课程时指定课程根目录：`xiaotuo start --courses <课程根目录>`（`uvx` 同样支持）。
 
 启动后在浏览器打开终端里显示的地址（默认 `http://127.0.0.1:13773`）。常用参数：
 
@@ -34,6 +41,8 @@ xiaotuo start --courses ./my-courses
 - 多人共用或需要长期运行时，建议使用 Docker 方式：<https://github.com/winter6205/xiaotuo/blob/main/docs/local-run.md>
 
 ## 制作课程
+
+如需让 Agent 制作或校验课程，请克隆本仓库：课程制作 skill（`.agents/` 下）和内容校验脚本只随仓库提供，不包含在安装包中。
 
 - 课程格式与示例：<https://github.com/winter6205/xiaotuo/tree/main/examples/sample-course>
 - 课程制作 skill（供 Claude Code、Cursor、Codex 等 Agent 使用）：<https://github.com/winter6205/xiaotuo/blob/main/.agents/skills/course-authoring/SKILL.md>
