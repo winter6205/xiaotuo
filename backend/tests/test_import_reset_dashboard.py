@@ -125,7 +125,7 @@ def test_dashboard(user):
     assert ch02["chapter_id"] == "02" and ch02["has_boss"] is False and ch02["boss_cleared"] is False
     assert a["badges_total"] == 8 and a["badges_count"] == 2  # first + boss01
     assert d["summary"]["xp_total"] == 115 and d["summary"]["days_total"] == 3
-    assert d["summary"]["streak_best"] == 3 and d["summary"]["badges_total"] == 28  # alpha 8 + beta 5 + gamma 9 + demo 6
+    assert d["summary"]["streak_best"] == 3 and d["summary"]["badges_total"] == 24  # alpha 8 + beta 5 + gamma 9 + demo 2（清单只声明 boss01、grad）
     assert {b["badge_id"] for b in d["badges"]} == {"first", "boss01"}
     assert len(d["recent"]) == 5 and d["recent"][0]["course"] == "beta"
     r0 = next(x for x in d["recent"] if x["item_id"] == "01-1-quiz-x")

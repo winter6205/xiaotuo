@@ -163,7 +163,9 @@ def build_static(cs: CourseSource, problems: list[str]) -> tuple[dict, list[dict
     for i in items:
         if i["max_xp"] <= 0 and i["type"] != "track":
             problems.append(f"{code}：{i['id']} max_xp 缺失或为 0")
-    extra = {"base_badges": m.get("base_badges", BASE_BADGES), "grad_badge": m.get("grad_badge", GRAD_BADGE),
+    # static 课程的徽章表以清单为准：只有清单声明的 base_badges / grad_badge 才计入，缺省为空，
+    # 不再隐式补入通用徽章（否则只定义 1 枚 Boss 徽章的课程会显示 x/6）
+    extra = {"base_badges": m.get("base_badges", []), "grad_badge": m.get("grad_badge"),
              "levels": m.get("levels", [list(x) for x in LEVELS]), "item_badges": m.get("item_badges", {})}
     return _finish(cs, items, cpages, chapters, badges, extra), items
 

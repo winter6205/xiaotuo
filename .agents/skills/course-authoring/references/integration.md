@@ -66,10 +66,14 @@
 | `home_chapter` | 无 | 目录首页章，不参与毕业判定（Boss 与徽章照常） |
 | `xp` | `{"done":10,"default":10,"boss_stage":20,"boss_clear":50,"boss_perfect":30}` | `static` 引擎下各类型的默认 XP，页面元素的 `data-xp` 优先；可按组件类型加键（如 `"quiz": 10`）。示例引擎把 Boss 分值写死为 20/50/30，使用示例引擎时不要覆盖 `boss_*` |
 | `badges` | 无 | Boss 徽章定义，格式为 `[[徽章 id, 图标, 名称, 说明], …]`；`static` 页面中 Boss 的 `data-badge` 必须在此定义 |
+| `base_badges` | `[]` | 通用徽章，格式同 `badges`；只发放后端认得的条件徽章：`first`（完成任意一节）、`streak3` / `streak7`（连学 3 / 7 天）、`comeback`（累计 5 道题先错后对）。未声明的通用徽章不计入学习中心的徽章总数 |
+| `grad_badge` | 无 | 毕业徽章 `[id, 图标, 名称, 说明]`，id 固定为 `grad`；参与毕业判定的各章完成后发放。未声明则不设毕业徽章 |
 | `accent_light` | 由 `accent` 派生 | `#rrggbb`，覆盖 `--c-l` |
 | `accent_dark` | 由 `accent` 派生 | `#rrggbb`，覆盖 `--c-d` |
 
 Boss 一律由页面标记识别（第 4.2 节），清单中不需要 Boss 字段。
+
+学习中心显示的徽章总数 = `base_badges` + 页面 Boss 引用的 `badges` + `grad_badge`，只计清单声明的徽章（`static` 引擎）。
 
 最小清单示例：
 

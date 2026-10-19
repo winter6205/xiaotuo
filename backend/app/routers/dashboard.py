@@ -67,7 +67,7 @@ async def dashboard(ctx: Ctx = Depends(user_only), tz: str | None = Query(defaul
                           "boss_cleared": bool((b := c.pages.get(k, {}).get("boss")) and f"{b}-clear" in st["xp"])}
                          for k, v in sorted(chapters.items())],
             "streak_cur": streak_now(st["streak"], today), "streak_best": st["streak"]["best"],
-            "days_total": len(days), "badges_count": len(st["badges"]), "badges_total": len(c.all_badges)})
+            "days_total": len(days), "badges_count": sum(1 for b in st["badges"] if c.badge(b)), "badges_total": len(c.all_badges)})
         for b, d in st["badges"].items():
             if (meta := c.badge(b)):
                 out_badges.append({"course": c.code, "badge_id": b, "icon": meta[1], "name": meta[2],

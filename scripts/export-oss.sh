@@ -16,7 +16,7 @@ TERMS=${2:-${XT_SCAN_TERMS:-}}
 MSG=${3:-}
 [ -n "$TERMS" ] && [ -s "$TERMS" ] || { echo "缺少词表文件" >&2; exit 2; }
 
-SRC=$(git rev-parse --show-toplevel)
+SRC=$(git -C "$(dirname "$(readlink -f "$0")")" rev-parse --show-toplevel)
 TERMS=$(realpath "$TERMS")
 case "$TERMS" in "$SRC"/*) echo "词表文件不得位于仓库内：$TERMS" >&2; exit 2 ;; esac
 mkdir -p "$TARGET"; TARGET=$(realpath "$TARGET")

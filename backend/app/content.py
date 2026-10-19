@@ -8,6 +8,7 @@
                               "base_badges", "grad_badge", "levels", "item_badges"}}
   pages 列各章；"graduation": false 的章（目录首页等）不参与 grad 判定，但其 Boss 通关、徽章、has_boss 照常计算。
   badges 为 Boss 徽章；base_badges / grad_badge / levels 缺省时用下方通用默认值。
+  static 课程由 build_content.py 按清单写出 base_badges / grad_badge（未声明则为 [] / null，不计入徽章表）。
 - items-<课程 id>.json：[{"id", "page", "type", "max_xp"}, ...]
 """
 import json
@@ -59,7 +60,7 @@ class Course:
     order: float = 0
     state_version: int = 1
     base_badges: list[list[str]] = field(default_factory=lambda: BASE_BADGES)
-    grad_badge: list[str] = field(default_factory=lambda: GRAD_BADGE)
+    grad_badge: list[str] | None = field(default_factory=lambda: GRAD_BADGE)
     levels: list[tuple] = field(default_factory=lambda: LEVELS)
     item_badges: dict[str, str] = field(default_factory=dict)  # 组件 id → 不看答案做对即得的徽章
 
@@ -70,7 +71,7 @@ class Course:
 
     @property
     def all_badges(self) -> list[list[str]]:
-        return self.base_badges + self.badges + [self.grad_badge]
+        return self.base_badges + self.badges + ([self.grad_badge] if self.grad_badge else [])
 
     def badge(self, badge_id: str) -> list[str] | None:
         return next((b for b in self.all_badges if b[0] == badge_id), None)

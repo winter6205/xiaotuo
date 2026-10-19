@@ -1,6 +1,6 @@
 """dashboard 每课 / 每章的 scored_total、scored_done、tracks_done：跟踪项（0 XP）不计入 scored。"""
 from tests.conftest import ev
-from tests.test_migrations_and_contract import check
+from tests.test_migrations_and_contract import _sql, check
 
 
 def _by(d):
@@ -46,6 +46,27 @@ def test_sample_course_events(user):
         ev("01-boss-s1", amt=20, course="demo"), ev("01-boss-clear", amt=50, course="demo"),
         ev("01-done-read", kind="done", amt=10, course="demo")]}).json()
     assert all(x["status"] == "applied" for x in r["results"])
-    assert {"first", "boss01", "grad"} <= set(r["new_badges"])
+    # 示例课程清单只声明 boss01 与 grad_badge：不再隐式补入 first、streak3 等通用徽章
+    assert sorted(r["new_badges"]) == ["boss01", "grad"]
     snap = user.get("/api/progress/demo").json()
     assert snap["storage_key"] == "demo-v1" and snap["state"]["course"] == "demo"
+
+
+def test_static_badges_follow_manifest(user):
+    """回归：static 课程的徽章表只含清单声明的徽章（示例课程为 boss01 + grad），不叠加通用徽章（此前显示 x/6）。"""
+    from app.content import courses
+    demo = courses()["demo"]
+    assert [b[0] for b in demo.all_badges] == ["boss01", "grad"]
+    d = user.get("/api/dashboard").json()
+    c = next(x for x in d["courses"] if x["course"] == "demo")
+    assert (c["badges_count"], c["badges_total"]) == (0, 2)
+    user.post("/api/progress/demo/events", {"events": [
+        ev("01-quiz-1", amt=10, solved={"rev": False, "wrong": 0}, course="demo"),
+        ev("01-boss-s1", amt=20, course="demo"), ev("01-boss-clear", amt=50, course="demo")]})
+    # 库里残留清单未声明的徽章（如旧版本发放的 first）时，不计入已得数
+    _sql("INSERT INTO badge_awards (user_id, course, badge_id, awarded_on) "
+         "SELECT id, 'demo', 'first', CURRENT_DATE FROM users")
+    d = user.get("/api/dashboard").json()
+    c = next(x for x in d["courses"] if x["course"] == "demo")
+    assert (c["badges_count"], c["badges_total"]) == (1, 2)
+    assert [b["badge_id"] for b in d["badges"] if b["course"] == "demo"] == ["boss01"]

@@ -1,0 +1,33 @@
+# 小驼
+
+> 小驼是一个 Agent 学习平台。Agent 调用课程制作 skill（course-authoring），在学习空间里生成互动课程，帮助使用者学习任何主题。后端 FastAPI + PostgreSQL，前端 React，通过 Docker Compose 本地运行；课程内容放在仓库外的课程目录中。
+
+开始前先读 AGENTS.md。启动：`cp .env.example .env && docker compose up -d --build`，默认加载仓库自带的示例课程 `examples/`。
+
+## 入门
+
+- [README](https://github.com/winter6205/xiaotuo/blob/main/README.md): 平台概览、交给 Agent 的提示词、本地运行
+- [AGENTS.md](https://github.com/winter6205/xiaotuo/blob/main/AGENTS.md): coding agent 必须遵守的规则与提交前检查
+- [本地运行](https://github.com/winter6205/xiaotuo/blob/main/docs/local-run.md): Docker Compose 运行、配置项、数据卷隔离、备份与迁移对齐
+
+## 课程制作 skill
+
+- [SKILL.md](https://github.com/winter6205/xiaotuo/blob/main/.agents/skills/course-authoring/SKILL.md): 输入输出、硬规则、步骤与四步完成标准
+- [写课方法](https://github.com/winter6205/xiaotuo/blob/main/.agents/skills/course-authoring/references/authoring-method.md): 分页、练习、小测、Boss 关与验收
+- [接入小驼](https://github.com/winter6205/xiaotuo/blob/main/.agents/skills/course-authoring/references/integration.md): course.json 字段、页面骨架与必需属性、校验命令
+- [视觉规范](https://github.com/winter6205/xiaotuo/blob/main/.agents/skills/course-authoring/references/visual-spec.md): 配色、对比度、嵌入与窄屏
+- [完整走查](https://github.com/winter6205/xiaotuo/blob/main/.agents/skills/course-authoring/references/walkthrough.md): 从零做一门课的命令与输出
+- [示例课程](https://github.com/winter6205/xiaotuo/blob/main/examples/sample-course/course.json): 可对照的最小 static 课程
+
+## 规则
+
+- [题目 id](https://github.com/winter6205/xiaotuo/blob/main/.agents/rules/content-ids.md): 已发布 id 只增不删
+- [Docker](https://github.com/winter6205/xiaotuo/blob/main/.agents/rules/docker.md): 数据卷与测试环境隔离
+- [环境变量与密钥](https://github.com/winter6205/xiaotuo/blob/main/.agents/rules/env-and-secrets.md): .env 与示例值约定
+- [数据库迁移](https://github.com/winter6205/xiaotuo/blob/main/.agents/rules/migrations.md): 基线 0001_baseline 与 stamp 对齐
+
+## Optional
+
+- [贡献指南](https://github.com/winter6205/xiaotuo/blob/main/CONTRIBUTING.md): 开发环境、测试命令与 PR 流程
+- [安全策略](https://github.com/winter6205/xiaotuo/blob/main/SECURITY.md): 私密漏洞报告
+- [接口契约](https://github.com/winter6205/xiaotuo/blob/main/api/openapi.yaml): OpenAPI 定义

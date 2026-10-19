@@ -6,6 +6,24 @@
 
 小驼是一个 Agent 学习平台。Agent 调用课程制作 skill，在学习空间里生成互动课程，帮助使用者学习任何主题。仓库只包含平台代码，不含课程内容。
 
+## 交给你的 Agent
+
+把下面的提示词粘贴给 Claude Code、Cursor 或 Codex，替换 `<主题>` 即可让 Agent 部署小驼并制作一门课程：
+
+```text
+克隆 https://github.com/winter6205/xiaotuo 。先阅读仓库根目录的 AGENTS.md，再阅读
+.agents/skills/course-authoring/SKILL.md 及其 references/。
+在仓库根目录执行 `cp .env.example .env && docker compose up -d --build` 启动小驼。
+然后按该 skill 在仓库外的课程目录中制作一门关于「<主题>」的课程，
+执行 SKILL.md 中「完成标准」的四步命令，全部返回 0 后汇报课程目录与结果。
+```
+
+只能读取 URL 的 Agent 可使用原始链接：
+
+- AGENTS.md：<https://raw.githubusercontent.com/winter6205/xiaotuo/main/AGENTS.md>
+- SKILL.md：<https://raw.githubusercontent.com/winter6205/xiaotuo/main/.agents/skills/course-authoring/SKILL.md>
+- 文档索引：<https://raw.githubusercontent.com/winter6205/xiaotuo/main/llms.txt>
+
 ## 平台是什么
 
 学习空间负责加载课程、呈现页面并记录学习过程：
