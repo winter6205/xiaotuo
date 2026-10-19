@@ -1,0 +1,146 @@
+[
+ {
+  "id": "00-done-a",
+  "page": "00",
+  "type": "done",
+  "max_xp": 10
+ },
+ {
+  "id": "00-done-b",
+  "page": "00",
+  "type": "done",
+  "max_xp": 10
+ },
+ {
+  "id": "00-rec-a",
+  "page": "00",
+  "type": "track",
+  "max_xp": 0
+ },
+ {
+  "id": "00-plan-w1",
+  "page": "00",
+  "type": "track",
+  "max_xp": 0
+ },
+ {
+  "id": "00-boss-s1",
+  "page": "00",
+  "type": "boss",
+  "max_xp": 20
+ },
+ {
+  "id": "00-boss-s2",
+  "page": "00",
+  "type": "boss",
+  "max_xp": 20
+ },
+ {
+  "id": "00-boss-s3",
+  "page": "00",
+  "type": "boss",
+  "max_xp": 20
+ },
+ {
+  "id": "00-boss-clear",
+  "page": "00",
+  "type": "boss",
+  "max_xp": 50
+ },
+ {
+  "id": "00-boss-perfect",
+  "page": "00",
+  "type": "boss",
+  "max_xp": 30
+ },
+ {
+  "id": "01-done-a",
+  "page": "01",
+  "type": "done",
+  "max_xp": 10
+ },
+ {
+  "id": "01-done-b",
+  "page": "01",
+  "type": "done",
+  "max_xp": 10
+ },
+ {
+  "id": "01-exp-mem",
+  "page": "01",
+  "type": "experiment",
+  "max_xp": 15
+ },
+ {
+  "id": "01-boss-s1",
+  "page": "01",
+  "type": "boss",
+  "max_xp": 20
+ },
+ {
+  "id": "01-boss-s2",
+  "page": "01",
+  "type": "boss",
+  "max_xp": 20
+ },
+ {
+  "id": "01-boss-clear",
+  "page": "01",
+  "type": "boss",
+  "max_xp": 50
+ },
+ {
+  "id": "01-boss-perfect",
+  "page": "01",
+  "type": "boss",
+  "max_xp": 30
+ },
+ {
+  "id": "02-done-a",
+  "page": "02",
+  "type": "done",
+  "max_xp": 10
+ },
+ {
+  "id": "02-done-b",
+  "page": "02",
+  "type": "done",
+  "max_xp": 10
+ },
+ {
+  "id": "02-exp-a",
+  "page": "02",
+  "type": "experiment",
+  "max_xp": 15
+ },
+ {
+  "id": "02-boss-s1",
+  "page": "02",
+  "type": "boss",
+  "max_xp": 20
+ },
+ {
+  "id": "02-boss-s2",
+  "page": "02",
+  "type": "boss",
+  "max_xp": 20
+ },
+ {
+  "id": "02-boss-clear",
+  "page": "02",
+  "type": "boss",
+  "max_xp": 50
+ },
+ {
+  "id": "02-boss-perfect",
+  "page": "02",
+  "type": "boss",
+  "max_xp": 30
+ },
+ {
+  "id": "02-plan-d0",
+  "page": "02",
+  "type": "track",
+  "max_xp": 0
+ }
+]

@@ -1,0 +1,55 @@
+/* =========================================================
+   小驼 · iframe 内注入样式  xt-embed.css
+   - 外层在 iframe 文档 DOMContentLoaded 时给 <html> 加 .xt-embed 并插入本文件
+   - 全部规则挂在 html.xt-embed 下；file:// 直接打开教材页时不生效
+   - 隐藏：nav.toc（含 .subtoc）、.c-top（course.js 运行时插入，course.js L738）、
+     #page-progress（course.js L1000 运行时插入）、
+     .data-tools（课程首页章的导出/导入/清空入口；外层学习中心另有入口）
+   - 保留：nav.subnav、.hero、.progress、正文全部组件、.toast/.xp-fly/.confetti 反馈
+   ========================================================= */
+html.xt-embed nav.toc,
+html.xt-embed body.toc-open nav.toc,
+html.xt-embed .c-top,
+html.xt-embed #page-progress,
+html.xt-embed .data-tools{display:none!important}
+
+/* 两栏 → 单栏：外层目录已替代左栏 */
+html.xt-embed .wrap{display:block;max-width:960px;padding:0}
+/* 外层 .xt-frame-box 已是卡片，去掉教材 main 的边框与阴影，避免卡片套卡片（与 course.css 打印样式同法） */
+html.xt-embed main{border:0;border-radius:0;box-shadow:none}
+@media (max-width:900px){
+  html.xt-embed .wrap{padding:0}
+}
+
+/* ---------- M4 内容页评审 CSS 修正 ---------- */
+/* 1. 课程首页章徽章墙下的「进度只保存在当前浏览器里」说明：登录后进度已同步服务器，嵌入时隐藏。
+      结构为 .badge-wall 之后的同级 .data-tools 与 p.meta（顺序不定）；
+      全部教材中 .badge-wall 之后的同级 p.meta 只有这两句，其他 p.meta 不受影响 */
+html.xt-embed .badge-wall ~ p.meta{display:none}
+
+/* 3. 表头不换行；窄列不再逐字折行（≤900px 时 course.css 已让 table 变 block + overflow-x:auto，横向滚动不撑宽页面） */
+html.xt-embed main th{white-space:nowrap}
+html.xt-embed main td{min-width:3.5em}
+
+/* 5. 可横向滚动的代码块 / 表格：细滚动条提示 */
+html.xt-embed main pre,
+html.xt-embed main table,
+html.xt-embed main .tscroll{scrollbar-width:thin;scrollbar-color:#b9a6dd transparent}
+html.xt-embed main pre{scrollbar-color:#8a7bab #2d2440}
+
+@media (max-width:720px){
+  /* 2. 窄屏收窄正文内边距：外层 .xt-frame-box 已有内边距，main 无边框，只留很小的呼吸位 */
+  html.xt-embed main{padding:18px 6px}
+  html.xt-embed .hero{padding:16px 14px}
+  html.xt-embed section.primer{padding:14px 12px}
+  /* 4. 章节标签允许自然换行，换行后用中等圆角，不再是 99px 胶囊 */
+  html.xt-embed .hero .lvl{display:inline-block;max-width:100%;white-space:normal;line-height:1.5;border-radius:14px;padding:3px 12px;text-wrap:balance}
+}
+html.xt-embed .local-note{display:none}
+/* M8：课程首页章「0. 我的学习进度」整节（说明、.me-panel、徽章墙、p.meta、.data-tools）与外层仪表盘重复，嵌入时整节隐藏；
+   页内目录 nav.toc 已在嵌入时隐藏，指向 #overall 的目录链接不会成为死链 */
+html.xt-embed #overall{display:none}
+
+/* 读完打卡（static 引擎页面，外层绑定）：已打卡态 */
+html.xt-embed .xt-check{cursor:pointer}
+html.xt-embed .xt-check.xt-check--done{cursor:default;opacity:.85}

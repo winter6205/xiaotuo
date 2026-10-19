@@ -1,0 +1,52 @@
+# 小驼本地运行（Docker）。说明见 docs/local-run.md
+# 独立 compose 项目 xiaotuo：容器名带 xiaotuo- 前缀，数据卷默认 xiaotuo-pgdata（XT_PG_VOLUME 可改），数据库不对宿主暴露端口
+# 注意：-p 不会隔离数据卷名；不要对存有数据的项目执行 docker compose down -v
+name: xiaotuo
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: xiaotuo
+      POSTGRES_PASSWORD: ${XT_DB_PASSWORD:?在 .env 中设置 XT_DB_PASSWORD}
+      POSTGRES_DB: xiaotuo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U xiaotuo -d xiaotuo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      additional_contexts:
+        # 构建时读取课程目录，生成课程目录数据
+        course: ${CONTENT_HOST_DIR:-./examples}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://xiaotuo:${XT_DB_PASSWORD}@db:5432/xiaotuo
+      EMAIL_ENABLED: "false"
+      COOKIE_SECURE: "false"
+      RATELIMIT_MULTIPLIER: ${XT_RATELIMIT_MULTIPLIER:-1}
+    volumes:
+      # 课程目录只读挂载，应用通过 COURSE_DIR=/course 提供课程页
+      - ${CONTENT_HOST_DIR:-./examples}:/course:ro
+    ports:
+      - "127.0.0.1:${XT_PORT:-13773}:13773"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:13773/api/health/ready', timeout=3).status == 200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+    # 数据卷名可配置；默认值兼容已有数据。另起一套环境时务必设置不同的 XT_PG_VOLUME
+    name: ${XT_PG_VOLUME:-xiaotuo-pgdata}

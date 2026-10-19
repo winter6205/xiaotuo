@@ -1,0 +1,1482 @@
+openapi: 3.1.0
+info:
+  title: 小驼学习应用 API
+  version: 0.4.0
+  summary: 账号、会话、进度同步、导入与个人学习中心（草案）
+  description: "课程由服务端从课程根目录（COURSE_DIR）自动发现：每个含 `course.json` 的子目录是一门课，生成的 `courses.json` + `items-<课程 id>.json` 是前后端共用的课程数据。\n\n- 课程路径参数 `course` 为课程清单中的 id（`^[a-z][a-z0-9_]{0,15}$`）；未知 id 返回 404 `course_not_found`。课程 id 与 COURSE_ID、localStorage 键的映射只定义在课程清单 / 生成的 `courses.json` 中。\n- 会话：Cookie `xt_session`（HttpOnly、Secure、SameSite=Lax、Path=/），服务端会话存 PostgreSQL；登录会话固定 30 天过期，不做滑动续期；匿名预会话 2 小时。\n- CSRF：`GET /api/me` 返回 `csrf_token`；所有 POST/PUT/PATCH/DELETE 须带请求头 `X-CSRF-Token`。\n  未登录时 `/api/me` 也返回匿名 CSRF token（绑定预会话 Cookie），供注册/登录/找回密码使用；登录成功后重新生成会话 ID 与 CSRF token。\n- 密码 argon2id。首版不做邮箱验证；找回密码经 Resend 发信。\n- 防作弊不是目标：服务端只校验 `item_id` 存在于 items 清单、`amt` 上限为 `max_xp`。\n- 时间均为 RFC 3339；日期（连学、徽章获得日）为学员本地日期 `YYYY-MM-DD`，与课程引擎 `today()` 一致。\n- 配置 `EMAIL_ENABLED`（默认 false，生产环境显式设为 true）：为 false 时找回密码接口返回 503 `email_disabled`，`/api/me` 的 `features.password_reset=false`。\n- 密码规则：10–128 字符，不设组合要求，拒绝常见弱密码表（如 top 10k）中的密码。\n"
+servers:
+- url: /
+  description: 与外壳同源部署
+tags:
+- name: auth
+- name: progress
+- name: dashboard
+- name: ops
+security:
+- sessionCookie: []
+paths:
+  /api/me:
+    get:
+      tags:
+      - auth
+      operationId: getMe
+      summary: 当前用户与 CSRF token
+      security:
+      - {}
+      - sessionCookie: []
+      responses:
+        '200':
+          description: 已登录返回 user；未登录 user 为 null，仍下发 csrf_token
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+              examples:
+                loggedIn:
+                  value:
+                    user:
+                      id: 42
+                      email: xiaotuo@example.com
+                      created_at: '2026-10-18T08:00:00Z'
+                    csrf_token: 9f2c1e7a0b4d4c0c8f3e2a1b6d5c4e3f
+                    default_course: demo
+                    features:
+                      password_reset: true
+                anonymous:
+                  value:
+                    user: null
+                    csrf_token: 3a1b2c3d4e5f60718293a4b5c6d7e8f9
+                    default_course: demo
+                    features:
+                      password_reset: false
+  /api/auth/register:
+    post:
+      tags:
+      - auth
+      operationId: register
+      summary: 注册（首版无邮箱验证，注册后即登录）
+      security:
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+            example:
+              email: xiaotuo@example.com
+              password: correct-horse-battery
+      responses:
+        '201':
+          description: 注册成功并已建立会话；返回新 CSRF token
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SetSessionCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '409':
+          description: 邮箱已注册。注：注册接口无法完全避免枚举，依赖限流缓解（见待定问题）。
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: email_taken
+                message: 该邮箱已注册，可直接登录或找回密码
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/auth/login:
+    post:
+      tags:
+      - auth
+      operationId: login
+      summary: 登录（成功后重新生成会话 ID 与 CSRF token）
+      security:
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        '200':
+          description: 登录成功
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/SetSessionCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: 邮箱或密码错误（统一文案，不区分哪一项）
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: invalid_credentials
+                message: 邮箱或密码不正确
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/auth/logout:
+    post:
+      tags:
+      - auth
+      operationId: logout
+      summary: 退出登录（外壳须先上传离线队列，§5.2-6）
+      parameters:
+      - $ref: '#/components/parameters/CsrfHeader'
+      responses:
+        '204':
+          description: 会话已删除，Cookie 已清除（Max-Age=0）
+          headers:
+            Set-Cookie:
+              $ref: '#/components/headers/ClearSessionCookie'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+  /api/auth/password-reset/request:
+    post:
+      tags:
+      - auth
+      operationId: requestPasswordReset
+      summary: 申请重置链接（经 Resend 发信）
+      description: 无论邮箱是否注册都返回 202 与同一文案。token 一次性、30 分钟过期，服务端只存 SHA-256 哈希；同一用户新申请使旧 token 失效。
+      security:
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - email
+              additionalProperties: false
+              properties:
+                email:
+                  type: string
+                  format: email
+                  maxLength: 254
+            example:
+              email: xiaotuo@example.com
+      responses:
+        '202':
+          description: 已受理
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+              example:
+                message: 如果该邮箱已注册，你会在几分钟内收到重置链接
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/EmailDisabled'
+  /api/auth/password-reset/confirm:
+    post:
+      tags:
+      - auth
+      operationId: confirmPasswordReset
+      summary: 用 token 设置新密码；成功后该用户全部会话失效
+      security:
+      - {}
+      parameters:
+      - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - token
+              - new_password
+              additionalProperties: false
+              properties:
+                token:
+                  type: string
+                  minLength: 32
+                  maxLength: 128
+                  description: '链接中的明文 token（URL 片段 #token=，避免进入服务器日志与 Referer）'
+                new_password:
+                  $ref: '#/components/schemas/Password'
+      responses:
+        '204':
+          description: 已重置；需重新登录（不自动登录）
+        '400':
+          description: token 无效、已用或过期（统一文案）；或密码不合规
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: reset_token_invalid
+                message: 链接已失效，请重新申请
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/EmailDisabled'
+  /api/progress/{course}:
+    parameters:
+    - $ref: '#/components/parameters/Course'
+    get:
+      tags:
+      - progress
+      operationId: getProgressSnapshot
+      summary: 进度快照（与 course.js blank() 同构，可直接写入 localStorage）
+      description: 外壳把 `state` 写入 `storage_key`。服务端复算 `streak`（本课活动日）与 `badges`（快照包含所有条件已满足的徽章，日期取最早），保证 course.js `checkBadges()` 不会再补发。`data` 只含由 `<boss>-clear` 推出的 `cleared.<page>`；`quiet`、`sections`
+        返回默认值，外壳保留本地值。支持 ETag。
+      parameters:
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 快照
+          headers:
+            ETag:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProgressSnapshot'
+              example:
+                course: demo
+                storage_key: demo-v1
+                server_time: '2026-10-18T08:30:00Z'
+                content_version: 3f9a1c2
+                state:
+                  version: 1
+                  course: demo
+                  xp:
+                    01-1-done-intro: 10
+                    01-1-quiz-http: 10
+                    01-1-fill-route: 0
+                    01-boss-s1: 20
+                  done:
+                    01-1-done-intro: 1
+                  rec: {}
+                  solved:
+                    01-1-quiz-http:
+                      rev: false
+                      wrong: 0
+                    01-1-fill-route:
+                      rev: true
+                      wrong: 2
+                  fix: {}
+                  streak:
+                    cur: 2
+                    best: 3
+                    last: '2026-10-18'
+                  days:
+                    '2026-10-16': 1
+                    '2026-10-17': 1
+                    '2026-10-18': 1
+                  badges:
+                    first: '2026-10-16'
+                    streak3: '2026-10-18'
+                  quiet: false
+                  data:
+                    cleared.01: 1
+                  sections: {}
+        '304':
+          description: 未变化
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/progress/{course}/events:
+    parameters:
+    - $ref: '#/components/parameters/Course'
+    post:
+      tags:
+      - progress
+      operationId: postProgressEvents
+      summary: 批量提交进度事件（幂等）
+      description: '- 去重键 `(user_id, client_event_id)`；重放同一事件返回 `duplicate`，结果不变。
+
+        - `xp`/`done`：`amt` 截断到 items.json 的 `max_xp`；同项已存在时取 `max(旧, 新)`，`done_at` 取较早者。`amt=0` 为有效完成。
+
+        - 未知 `item_id` 返回 `rejected`（unknown_item），不影响同批其他事件；整批不因单条失败回滚。
+
+        - `ts` 为客户端时间，只用于 `done_at` 与活动日；晚于服务器时间 5 分钟以上按服务器时间记。
+
+        - 每批 ≤ 500 条，请求体 ≤ 1 MB（超出返回 413）。
+
+        - 事件中的 `course` 应与路径一致；不一致的单条返回 `rejected`（reason `course_mismatch`），不影响同批其他事件，不会整批 400。
+
+        - 客户端离线队列最长保留 30 天，超期事件由外壳丢弃并提示学员（服务端不拒收旧 ts）。
+
+        '
+      parameters:
+      - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - events
+              additionalProperties: false
+              properties:
+                events:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items:
+                    $ref: '#/components/schemas/ProgressEvent'
+            example:
+              events:
+              - course: demo
+                item_id: 01-1-quiz-http
+                kind: xp
+                amt: 10
+                client_event_id: 0b8f3e1c-6c1a-4f0e-9a51-2a8d9b7e1f01
+                ts: '2026-10-18T08:21:04+08:00'
+                day: '2026-10-18'
+                solved:
+                  rev: false
+                  wrong: 0
+              - course: demo
+                item_id: 01-1-fill-route
+                kind: xp
+                amt: 0
+                client_event_id: 0b8f3e1c-6c1a-4f0e-9a51-2a8d9b7e1f02
+                ts: '2026-10-18T08:22:10+08:00'
+                day: '2026-10-18'
+                solved:
+                  rev: true
+                  wrong: 2
+              - course: demo
+                item_id: 01-1-done-intro
+                kind: done
+                amt: 10
+                client_event_id: 0b8f3e1c-6c1a-4f0e-9a51-2a8d9b7e1f03
+                ts: '2026-10-18T08:25:00+08:00'
+                day: '2026-10-18'
+              - course: demo
+                item_id: 01-boss-q2
+                kind: solved
+                client_event_id: 0b8f3e1c-6c1a-4f0e-9a51-2a8d9b7e1f04
+                ts: '2026-10-18T08:26:00+08:00'
+                solved:
+                  rev: false
+                  wrong: 1
+                fix: true
+              - course: demo
+                item_id: 01-1-done-intro
+                kind: done
+                amt: 10
+                value: false
+                client_event_id: 0b8f3e1c-6c1a-4f0e-9a51-2a8d9b7e1f05
+                ts: '2026-10-18T08:30:00+08:00'
+      responses:
+        '200':
+          description: 逐条结果与复算后的汇总
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventsResult'
+              example:
+                results:
+                - client_event_id: 0b8f3e1c-6c1a-4f0e-9a51-2a8d9b7e1f01
+                  status: applied
+                  amt: 10
+                - client_event_id: 0b8f3e1c-6c1a-4f0e-9a51-2a8d9b7e1f02
+                  status: applied
+                  amt: 0
+                - client_event_id: 0b8f3e1c-6c1a-4f0e-9a51-2a8d9b7e1f03
+                  status: duplicate
+                  amt: 10
+                - client_event_id: 0b8f3e1c-6c1a-4f0e-9a51-2a8d9b7e1f04
+                  status: applied
+                xp_total: 40
+                new_badges:
+                - first
+                snapshot_etag: W/"demo-42-118"
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/progress/{course}/import:
+    parameters:
+    - $ref: '#/components/parameters/Course'
+    post:
+      tags:
+      - progress
+      operationId: importProgress
+      summary: 导入教材导出 JSON / 首次登录合并本地进度（并集）
+      description: '`state` 为 course.js 导出文件或 localStorage 中的原始对象（`version===1`、`course` 等于该课 COURSE_ID）。
+
+        与教材页内导入（覆盖）不同，服务端按并集合并：每项 `amt` 取 max 且不超过 `max_xp`，时间取较早；
+
+        `solved` 取 rev 为 false 优先、`wrong` 取较小值；`fix`、`rec`、`days` 并集；`badges` 并集取较早日期后由服务端复算校验；
+
+        `streak` 不采信，由 `activity_days` 复算；未知 id 计入 `unknown_ids` 并跳过。
+
+        `Idempotency-Key` 相同的重复请求返回首次结果。上限 2 MB。
+
+
+        嵌入模式下教材页 `.data-tools` 被隐藏，所有导入都走本接口（并集），不再使用页内覆盖式导入。
+
+
+        超期离线记录：离线队列中超过 30 天的事件不重放；前端改为把该课 localStorage 的完整状态提交到本接口合并，
+
+        `Idempotency-Key` 为 `expired-<course>-<YYYY-MM-DD>`，成功后再出队，失败则保留事件、下次重试。'
+      parameters:
+      - $ref: '#/components/parameters/CsrfHeader'
+      - name: Idempotency-Key
+        in: header
+        required: false
+        schema:
+          type: string
+          maxLength: 64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - source
+              - state
+              additionalProperties: false
+              properties:
+                source:
+                  type: string
+                  enum:
+                  - export_file
+                  - local_first_login
+                  description: 导出文件或首次登录的本地进度
+                state:
+                  $ref: '#/components/schemas/CourseState'
+      responses:
+        '200':
+          description: 合并结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+              example:
+                imported_at: '2026-10-18T08:40:00Z'
+                items_added: 37
+                items_raised: 2
+                unknown_ids:
+                - 01-old-quiz
+                badges_added:
+                - first
+                - streak3
+                xp_before: 120
+                xp_after: 535
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '413':
+          $ref: '#/components/responses/TooLarge'
+        '422':
+          description: 文件不是本课导出的进度：`version` 不等于 1 或 `course` 不是本课 COURSE_ID（`version` 错误也返回 422，而非 400）
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: import_course_mismatch
+                message: 这是另一门课的进度文件
+                details:
+                  expected: demo
+                  got: other
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /api/dashboard:
+    get:
+      tags:
+      - dashboard
+      operationId: getDashboard
+      summary: 个人学习中心汇总
+      description: '`streak_cur` 需要知道学员本地「今天」：传 `tz`（IANA 时区名）按该时区计算，缺省按 UTC。快照接口的 `streak` 只由活动日推出、不依赖「今天」，故不需要 `tz`。'
+      parameters:
+      - name: tz
+        in: query
+        required: false
+        description: IANA 时区名，如 `Asia/Hong_Kong`；无效时返回 400 validation_error
+        schema:
+          type: string
+          maxLength: 64
+        example: Asia/Hong_Kong
+      responses:
+        '200':
+          description: 汇总
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dashboard'
+              example:
+                user:
+                  id: 42
+                  email: xiaotuo@example.com
+                  created_at: '2026-10-16T02:00:00Z'
+                summary:
+                  xp_total: 790
+                  streak_cur: 2
+                  streak_best: 3
+                  days_total: 4
+                  badges_count: 4
+                  badges_total: 30
+                courses:
+                - course: demo
+                  title: 示例课程
+                  xp: 455
+                  xp_max: 4145
+                  level:
+                    level: 3
+                    level_name: 进阶
+                    level_min_xp: 300
+                    next_level_xp: 600
+                    next_level_name: 熟练
+                  items_done: 31
+                  items_total: 520
+                  chapters:
+                  - chapter_id: '03'
+                    title: Chapter 03
+                    items_done: 12
+                    items_total: 57
+                    xp: 160
+                    xp_max: 840
+                    has_boss: true
+                    boss_cleared: false
+                  streak_cur: 2
+                  streak_best: 3
+                  days_total: 3
+                  badges_count: 3
+                  badges_total: 16
+                badges:
+                - course: demo
+                  badge_id: first
+                  icon: 🐣
+                  name: 第一步
+                  desc: 完成任意一节
+                  awarded_at: '2026-10-16'
+                recent:
+                - at: '2026-10-18T00:25:00Z'
+                  course: demo
+                  chapter_id: '03'
+                  page_id: 03-2
+                  item_id: 03-2-sim-lock
+                  kind: xp
+                  amt: 15
+                last_import:
+                  imported_at: '2026-10-18T08:40:00Z'
+                  course: demo
+                  items_added: 37
+                  xp_delta: 415
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/health:
+    get:
+      tags:
+      - ops
+      operationId: health
+      summary: 存活检查（只检查进程，不访问数据库；Render healthCheckPath 使用）
+      security:
+      - {}
+      responses:
+        '200':
+          description: 进程存活
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+              example:
+                status: ok
+  /api/health/ready:
+    get:
+      tags:
+      - ops
+      operationId: healthReady
+      summary: 就绪检查（SELECT 1，超时 2 秒；监控与发布后冒烟测试使用）
+      security:
+      - {}
+      responses:
+        '200':
+          description: 正常
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              example:
+                status: ok
+                db: ok
+                version: 0.2.2
+                content_version:
+                  demo: demo-3f9a1c2e4b5d
+                email_enabled: true
+        '503':
+          description: 数据库不可用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Health'
+              example:
+                status: degraded
+                db: unavailable
+                version: 0.2.2
+  /api/progress/{scope}/reset:
+    post:
+      tags:
+      - progress
+      operationId: resetProgress
+      summary: 账号级清空进度（不可恢复）
+      description: 删除该用户在指定课程（或 all：全部课程）的 progress_items、badge_awards、activity_days，progress_events 保留至过期清理；之后快照为空。外壳成功后须把对应 localStorage 键写为 blank() 并清空离线队列中该课事件，否则旧本地数据会被当作新进度重新上报。
+      parameters:
+      - name: scope
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^([a-z][a-z0-9_]{0,15})$
+          description: 课程 id 或 all；未知课程 id 返回 400 validation_error
+      - $ref: '#/components/parameters/CsrfHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - confirm
+              additionalProperties: false
+              properties:
+                confirm:
+                  type: string
+                  description: 必须等于 "RESET <scope>"，如 "RESET demo" / "RESET all"
+            example:
+              confirm: RESET demo
+      responses:
+        '200':
+          description: 已清空
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - reset_at
+                - courses
+                - items_deleted
+                properties:
+                  reset_at:
+                    type: string
+                    format: date-time
+                  courses:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CourseCode'
+                  items_deleted:
+                    type: integer
+              example:
+                reset_at: '2026-10-18T08:45:00Z'
+                courses:
+                - demo
+                items_deleted: 118
+        '400':
+          description: confirm 不匹配
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                code: confirm_required
+                message: 请输入 RESET demo 确认
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/CsrfError'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: xt_session
+  parameters:
+    Course:
+      name: course
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/CourseCode'
+    CsrfHeader:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: 来自 GET /api/me 的 csrf_token
+      schema:
+        type: string
+        minLength: 32
+        maxLength: 128
+  headers:
+    SetSessionCookie:
+      description: '`xt_session=<opaque>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=2592000`'
+      schema:
+        type: string
+    ClearSessionCookie:
+      description: '`xt_session=; Max-Age=0; HttpOnly; Secure; SameSite=Lax; Path=/`'
+      schema:
+        type: string
+    RetryAfter:
+      description: 秒
+      schema:
+        type: integer
+        minimum: 1
+  responses:
+    ValidationError:
+      description: 请求格式或字段不合法
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            weak:
+              value:
+                code: weak_password
+                message: 这个密码太常见了，换一个吧
+            fields:
+              value:
+                code: validation_error
+                message: 请求字段不合法
+                details:
+                  fields:
+                  - loc:
+                    - body
+                    - password
+                    msg: 至少 10 个字符
+    Unauthorized:
+      description: 未登录或会话过期（外壳显示 session_expired）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: not_authenticated
+            message: 登录已过期，请重新登录
+    CsrfError:
+      description: 缺少或错误的 X-CSRF-Token；外壳应重新 GET /api/me 后重试一次
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: csrf_failed
+            message: 页面已过期，请刷新后重试
+    NotFound:
+      description: 课程不存在
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: course_not_found
+            message: 没有这门课
+    TooLarge:
+      description: 请求体过大
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: payload_too_large
+            message: 文件太大
+    RateLimited:
+      description: 触发限流（单实例进程内计数）。默认：登录 每 IP 10 次/分钟且每邮箱 5 次/15 分钟；注册 每 IP 5 次/小时；找回密码 每 IP 5 次/小时且每邮箱 3 次/小时；事件 每用户 120 次/分钟；重置密码确认 每 IP 10 次/小时；导入 每用户 30 次/分钟；账号级清空 每用户 10 次/小时。
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: rate_limited
+            message: 尝试太频繁，请 60 秒后再试
+            details:
+              retry_after: 60
+    EmailDisabled:
+      description: EMAIL_ENABLED=false，找回密码未启用
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: email_disabled
+            message: 找回密码暂未开放，请联系管理员
+  schemas:
+    CourseCode:
+      type: string
+      pattern: ^[a-z][a-z0-9_]{0,15}$
+      description: 课程 id（课程清单 course.json 的 id）；到 COURSE_ID 与 localStorage 键的映射只在生成的 courses.json
+    Error:
+      type: object
+      required:
+      - code
+      - message
+      properties:
+        code:
+          type: string
+          enum:
+          - validation_error
+          - not_authenticated
+          - csrf_failed
+          - invalid_credentials
+          - email_taken
+          - reset_token_invalid
+          - rate_limited
+          - course_not_found
+          - import_course_mismatch
+          - payload_too_large
+          - internal_error
+          - weak_password
+          - email_disabled
+          - confirm_required
+          - service_unavailable
+        message:
+          type: string
+          description: 可直接展示给学员的中文
+        details:
+          type: object
+          additionalProperties: true
+        request_id:
+          type: string
+    Message:
+      type: object
+      required:
+      - message
+      properties:
+        message:
+          type: string
+    Credentials:
+      type: object
+      required:
+      - email
+      - password
+      additionalProperties: false
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          description: 存储前 trim + 小写；库中为普通 text 列加唯一索引（不用 citext），比较一律用规范化后的值
+        password:
+          $ref: '#/components/schemas/Password'
+    User:
+      type: object
+      required:
+      - id
+      - email
+      - created_at
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        created_at:
+          type: string
+          format: date-time
+    Me:
+      type: object
+      required:
+      - user
+      - csrf_token
+      - default_course
+      - features
+      properties:
+        user:
+          oneOf:
+          - $ref: '#/components/schemas/User'
+          - type: 'null'
+        csrf_token:
+          type: string
+        default_course:
+          $ref: '#/components/schemas/CourseCode'
+        features:
+          type: object
+          required:
+          - password_reset
+          properties:
+            password_reset:
+              type: boolean
+              description: = EMAIL_ENABLED；false 时外壳隐藏「忘记密码」
+    ItemId:
+      type: string
+      minLength: 1
+      maxLength: 128
+      pattern: ^[^\s/]+$
+      description: course.js data-id（items.json 中的 id），如 01-1-quiz-http、01-boss-clear
+    LocalDate:
+      type: string
+      pattern: ^\d{4}-\d{2}-\d{2}$
+    SolvedRecord:
+      type: object
+      required:
+      - rev
+      - wrong
+      additionalProperties: false
+      properties:
+        rev:
+          type: boolean
+          description: 是否看了答案
+        wrong:
+          type: integer
+          minimum: 0
+    ProgressEvent:
+      type: object
+      required:
+      - course
+      - item_id
+      - kind
+      - client_event_id
+      - ts
+      additionalProperties: false
+      properties:
+        course:
+          $ref: '#/components/schemas/CourseCode'
+        item_id:
+          $ref: '#/components/schemas/ItemId'
+        kind:
+          type: string
+          enum:
+          - xp
+          - done
+          - solved
+          - rec
+          description: 'xp：state.xp 新增（练习含模拟器、Boss 阶段/通关/完美）；外壳 300ms 防抖，把同一 id 的 xp+solved+fix 合并为一条，solved/fix 为可选字段。
+
+            done：小节打卡；value=false 表示取消勾选（done 跟随最后状态，XP 保留）。
+
+            solved：仅用于 Boss 内的题（只写 state.solved、不写 state.xp）。
+
+            rec：自报勾选，value 为勾选状态。徽章、data、sections 不上报，徽章由服务端复算。'
+        amt:
+          type: integer
+          minimum: 0
+          maximum: 1000
+          description: = state.xp[id] 原值（不换算），服务端截断到 items.json max_xp；0 有效。kind=xp/done 必填
+        client_event_id:
+          type: string
+          format: uuid
+        ts:
+          type: string
+          format: date-time
+        day:
+          $ref: '#/components/schemas/LocalDate'
+        solved:
+          $ref: '#/components/schemas/SolvedRecord'
+        fix:
+          type: boolean
+          description: state.fix 是否新增（先错后对）
+        value:
+          type: boolean
+          description: kind=done/rec 时的勾选状态，缺省 true
+      allOf:
+      - if:
+          properties:
+            kind:
+              enum:
+              - xp
+              - done
+        then:
+          required:
+          - amt
+    EventResult:
+      type: object
+      required:
+      - client_event_id
+      - status
+      properties:
+        client_event_id:
+          type: string
+        status:
+          type: string
+          enum:
+          - applied
+          - raised
+          - unchanged
+          - duplicate
+          - rejected
+        amt:
+          type: integer
+          description: 生效后的 amt（已截断、取 max）
+        reason:
+          type: string
+          enum:
+          - unknown_item
+          - course_mismatch
+          - amt_capped
+    EventsResult:
+      type: object
+      required:
+      - results
+      - xp_total
+      properties:
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventResult'
+        xp_total:
+          type: integer
+        new_badges:
+          type: array
+          items:
+            type: string
+        snapshot_etag:
+          type: string
+    CourseState:
+      type: object
+      description: 与课程引擎的 blank() 同构。state_version 1 的课 version 1 且带 course；state_version 2 的课 version 2、无 course 字段
+      required:
+      - version
+      - xp
+      properties:
+        version:
+          type: integer
+          enum:
+          - 1
+          - 2
+        course:
+          type: string
+          description: 课程清单的 course_id（缺省为课程 id）
+        xp:
+          type: object
+          additionalProperties:
+            type: integer
+            minimum: 0
+        done:
+          type: object
+          additionalProperties:
+            type: integer
+            const: 1
+        rec:
+          type: object
+          additionalProperties:
+            type: integer
+            const: 1
+        solved:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/SolvedRecord'
+        fix:
+          type: object
+          additionalProperties:
+            type: integer
+            const: 1
+        streak:
+          type: object
+          required:
+          - cur
+          - best
+          - last
+          properties:
+            cur:
+              type: integer
+              minimum: 0
+            best:
+              type: integer
+              minimum: 0
+            last:
+              oneOf:
+              - $ref: '#/components/schemas/LocalDate'
+              - type: 'null'
+        days:
+          type: object
+          additionalProperties:
+            type: integer
+            const: 1
+        badges:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/LocalDate'
+        quiet:
+          type: boolean
+        data:
+          type: object
+          additionalProperties: true
+        sections:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+    ProgressSnapshot:
+      type: object
+      required:
+      - course
+      - storage_key
+      - server_time
+      - state
+      properties:
+        course:
+          $ref: '#/components/schemas/CourseCode'
+        storage_key:
+          type: string
+          description: 课程清单的 storage_key（缺省为 "<id>-v<state_version>"）
+        server_time:
+          type: string
+          format: date-time
+        content_version:
+          type: string
+        state:
+          $ref: '#/components/schemas/CourseState'
+    ImportResult:
+      type: object
+      required:
+      - imported_at
+      - items_added
+      - items_raised
+      - unknown_ids
+      - badges_added
+      - xp_before
+      - xp_after
+      properties:
+        imported_at:
+          type: string
+          format: date-time
+        items_added:
+          type: integer
+        items_raised:
+          type: integer
+          description: 因取 max 而提高 amt 的项数
+        unknown_ids:
+          type: array
+          items:
+            type: string
+        badges_added:
+          type: array
+          items:
+            type: string
+        xp_before:
+          type: integer
+        xp_after:
+          type: integer
+    LevelInfo:
+      type: object
+      required:
+      - level
+      - level_name
+      - level_min_xp
+      - next_level_xp
+      - next_level_name
+      properties:
+        level:
+          type: integer
+          minimum: 1
+          maximum: 6
+        level_name:
+          type: string
+        level_min_xp:
+          type: integer
+        next_level_xp:
+          type:
+          - integer
+          - 'null'
+          description: 'Lv6 门槛 = max(1001, round(manifest.total*0.9))；已满级为 null'
+        next_level_name:
+          type:
+          - string
+          - 'null'
+    Dashboard:
+      type: object
+      required:
+      - user
+      - summary
+      - courses
+      - badges
+      - recent
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        summary:
+          type: object
+          description: 两门课合计视图：只显示总 XP，不显示等级（LEVELS 按课计算）
+          required:
+          - xp_total
+          - streak_cur
+          - streak_best
+          - days_total
+          - badges_count
+          - badges_total
+          properties:
+            xp_total:
+              type: integer
+            streak_cur:
+              type: integer
+              description: 两门课活动日并集上的 streakNow() 口径
+            streak_best:
+              type: integer
+            days_total:
+              type: integer
+              description: 并集天数
+            badges_count:
+              type: integer
+            badges_total:
+              type: integer
+              description: = 各课 badges_total 之和
+        courses:
+          type: array
+          items:
+            type: object
+            required:
+            - course
+            - title
+            - xp
+            - xp_max
+            - level
+            - items_done
+            - items_total
+            - chapters
+            - scored_total
+            - scored_done
+            - tracks_done
+            - streak_cur
+            - streak_best
+            - days_total
+            - badges_count
+            - badges_total
+            properties:
+              course:
+                $ref: '#/components/schemas/CourseCode'
+              title:
+                type: string
+              xp:
+                type: integer
+              xp_max:
+                type: integer
+              level:
+                $ref: '#/components/schemas/LevelInfo'
+                description: 本课等级（LEVELS，Lv6 门槛按本课 manifest.total）
+              items_done:
+                type: integer
+              items_total:
+                type: integer
+              scored_total:
+                type: integer
+                description: 计分项数（max_xp > 0），不含 0 XP 跟踪项；v0.3.1 新增
+              scored_done:
+                type: integer
+                description: 已完成的计分项数，完成口径同 items_done；v0.3.1 新增
+              tracks_done:
+                type: integer
+                description: 已勾选的 0 XP 跟踪项数（max_xp = 0），口径同 items_done；v0.3.1 新增
+              chapters:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - chapter_id
+                  - title
+                  - items_done
+                  - items_total
+                  - xp
+                  - xp_max
+                  - has_boss
+                  - boss_cleared
+                  - scored_total
+                  - scored_done
+                  - tracks_done
+                  properties:
+                    scored_total:
+                      type: integer
+                      description: 计分项数（max_xp > 0），不含 0 XP 跟踪项；v0.3.1 新增
+                    scored_done:
+                      type: integer
+                      description: 已完成的计分项数，完成口径同 items_done；v0.3.1 新增
+                    tracks_done:
+                      type: integer
+                      description: 已勾选的 0 XP 跟踪项数（max_xp = 0），口径同 items_done；v0.3.1 新增
+                    title:
+                      type: string
+                    items_done:
+                      type: integer
+                    items_total:
+                      type: integer
+                    xp:
+                      type: integer
+                    xp_max:
+                      type: integer
+                    has_boss:
+                      type: boolean
+                      description: 本章是否有 Boss；false 时 boss_cleared 恒为 false，前端显示「本章无 Boss」
+                    boss_cleared:
+                      type: boolean
+                    chapter_id:
+                      type: string
+                      description: 章，如 03
+              streak_cur:
+                type: integer
+              streak_best:
+                type: integer
+              days_total:
+                type: integer
+              badges_count:
+                type: integer
+              badges_total:
+                type: integer
+                description: BADGES 6 个 + 本课清单 Boss 徽章
+        badges:
+          type: array
+          items:
+            type: object
+            required:
+            - course
+            - badge_id
+            - icon
+            - name
+            - awarded_at
+            properties:
+              course:
+                $ref: '#/components/schemas/CourseCode'
+              badge_id:
+                type: string
+              icon:
+                type: string
+              name:
+                type: string
+              desc:
+                type: string
+              awarded_at:
+                $ref: '#/components/schemas/LocalDate'
+        recent:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required:
+            - at
+            - course
+            - item_id
+            - kind
+            - chapter_id
+            - page_id
+            properties:
+              at:
+                type: string
+                format: date-time
+              course:
+                $ref: '#/components/schemas/CourseCode'
+              item_id:
+                type: string
+              kind:
+                type: string
+              amt:
+                type:
+                - integer
+                - 'null'
+              chapter_id:
+                type: string
+                description: 章，如 03
+              page_id:
+                type: string
+                description: 小页，如 03-2；用于跳转
+        last_import:
+          oneOf:
+          - type: object
+            required:
+            - imported_at
+            - course
+            - items_added
+            - xp_delta
+            properties:
+              imported_at:
+                type: string
+                format: date-time
+              course:
+                $ref: '#/components/schemas/CourseCode'
+              items_added:
+                type: integer
+              xp_delta:
+                type: integer
+          - type: 'null'
+    Password:
+      type: string
+      minLength: 10
+      maxLength: 128
+      description: 10–128 字符；无组合要求；命中常见弱密码表返回 400 weak_password；argon2id 哈希
+    Health:
+      type: object
+      required:
+      - status
+      - db
+      - version
+      properties:
+        status:
+          type: string
+          enum:
+          - ok
+          - degraded
+        db:
+          type: string
+          enum:
+          - ok
+          - unavailable
+        version:
+          type: string
+        content_version:
+          type: object
+          additionalProperties:
+            type: string
+        email_enabled:
+          type: boolean

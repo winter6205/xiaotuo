@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "id": "demo",
+  "title": "示例课程",
+  "name": "示例课程",
+  "short": "示例",
+  "icon": "📘",
+  "order": 10,
+  "accent": "#4dabf7",
+  "state_version": 1,
+  "engine": "static",
+  "home_chapter": "00",
+  "graduation_chapters": ["01"],
+  "chapters": [
+    { "id": "00", "title": "开始", "file": "00-开始.html" },
+    { "id": "01", "title": "基础", "file": "01-基础.html" }
+  ],
+  "xp": { "done": 10, "quiz": 10 },
+  "badges": [["boss01", "🏆", "基础通关", "通关 01 章 Boss"]]
+}

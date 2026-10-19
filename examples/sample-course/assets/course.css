@@ -1,0 +1,9 @@
+/* 示例课程的最小样式 */
+body{margin:0;font:16px/1.7 system-ui,"Noto Sans CJK SC",sans-serif;color:#2b2b2b;background:#fafafa}
+main{max-width:760px;margin:0 auto;padding:24px 16px 64px}
+section{margin:24px 0}
+.quiz,.boss{padding:12px 16px;border:2px solid #ddd;border-radius:12px;background:#fff}
+.quiz button{display:block;margin:6px 0;padding:6px 12px;border:1px solid #ccc;border-radius:8px;background:#fff;cursor:pointer}
+.quiz.ok{border-color:#3ccf8e}.quiz button.wrong{border-color:#ff6b6b}
+.stage{margin:8px 0}.boss.cleared{border-color:#ffd43b}
+.xt-check{padding:8px 16px;border-radius:999px;border:2px solid #4dabf7;background:#fff;font-weight:700}

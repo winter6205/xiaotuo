@@ -1,0 +1,4 @@
+/* 视觉稿样式+ 外壳补充 */
+@import './styles/xt.css';
+.xt-frame { display: block; width: 100%; min-height: 80vh; border: 0; }
+.xt-sync .xt-btn, .xt-sync .xt-link { margin-left: 6px; }

@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.pytest_cache/
+node_modules/
+dist/
+
+# 课程衍生数据：由 COURSE_DIR 下的课程生成，不进仓库
+backend/content/
+baseline/course-ids.json

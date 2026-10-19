@@ -1,0 +1,240 @@
+{
+ "alpha": {
+  "course_id": "alpha",
+  "storage_key": "alpha-v1",
+  "title": "测试课程 A",
+  "content_version": "test-alpha",
+  "dir": "alpha",
+  "order": 1,
+  "chapters": {
+   "00": "目录",
+   "01": "第一章",
+   "02": "第二章"
+  },
+  "pages": {
+   "00": {
+    "sections": [
+     "00-done-a"
+    ],
+    "boss": "00-boss",
+    "badge": "boss00",
+    "graduation": false
+   },
+   "01": {
+    "sections": [
+     "01-done-a",
+     "01-done-b"
+    ],
+    "boss": "01-boss",
+    "badge": "boss01"
+   },
+   "02": {
+    "sections": [
+     "02-done-a"
+    ],
+    "boss": null
+   }
+  },
+  "badges": [
+   [
+    "boss00",
+    "🗺️",
+    "目录通关",
+    "通关 00 章 Boss"
+   ],
+   [
+    "boss01",
+    "🏆",
+    "第一章通关",
+    "通关 01 章 Boss"
+   ]
+  ],
+  "base_badges": [
+   [
+    "first",
+    "🐣",
+    "第一步",
+    "完成任意一节"
+   ],
+   [
+    "streak3",
+    "🔥",
+    "三天连学",
+    "连学天数达到 3"
+   ],
+   [
+    "streak7",
+    "🏅",
+    "七天连学",
+    "连学天数达到 7"
+   ],
+   [
+    "comeback",
+    "💪",
+    "越挫越勇",
+    "累计 5 道题先答错再改对"
+   ],
+   [
+    "coder",
+    "🐞",
+    "捉虫能手",
+    "完成 10 道代码找错或代码填空"
+   ]
+  ]
+ },
+ "beta": {
+  "course_id": "beta",
+  "storage_key": "beta-v1",
+  "title": "测试课程 B",
+  "content_version": "test-beta",
+  "dir": "beta",
+  "order": 2,
+  "chapters": {
+   "J1": "第一章"
+  },
+  "pages": {
+   "J1": {
+    "sections": [
+     "J1-done-a"
+    ],
+    "boss": null
+   }
+  },
+  "badges": []
+ },
+ "gamma": {
+  "course_id": "gamma",
+  "storage_key": "gamma-v2",
+  "title": "测试课程 C",
+  "content_version": "test-gamma",
+  "dir": "gamma",
+  "order": 3,
+  "total": 470,
+  "chapters": {
+   "00": "目录",
+   "01": "第一章",
+   "02": "第二章"
+  },
+  "pages": {
+   "00": {
+    "sections": [
+     "00-done-a",
+     "00-done-b"
+    ],
+    "boss": "00-boss",
+    "graduation": false,
+    "badge": "planner"
+   },
+   "01": {
+    "sections": [
+     "01-done-a",
+     "01-done-b"
+    ],
+    "boss": "01-boss",
+    "badge": "boss01"
+   },
+   "02": {
+    "sections": [
+     "02-done-a",
+     "02-done-b"
+    ],
+    "boss": "02-boss",
+    "badge": "boss02"
+   }
+  },
+  "badges": [
+   [
+    "planner",
+    "🗺️",
+    "规划完成",
+    "通关 00 章 Boss"
+   ],
+   [
+    "boss01",
+    "🏆",
+    "第一章通关",
+    "通关 01 章 Boss"
+   ],
+   [
+    "boss02",
+    "🥇",
+    "第二章通关",
+    "通关 02 章 Boss"
+   ]
+  ],
+  "state_version": 2,
+  "base_badges": [
+   [
+    "first",
+    "🐣",
+    "第一步",
+    "完成任意一节"
+   ],
+   [
+    "streak3",
+    "🔥",
+    "三天连学",
+    "连学天数达到 3"
+   ],
+   [
+    "streak7",
+    "🏅",
+    "七天连学",
+    "连学天数达到 7"
+   ],
+   [
+    "comeback",
+    "💪",
+    "越挫越勇",
+    "累计 5 道题先答错再改对"
+   ],
+   [
+    "skill",
+    "🧮",
+    "实验达人",
+    "不看答案完成 01 章实验"
+   ]
+  ],
+  "grad_badge": [
+   "grad",
+   "🎓",
+   "全课毕业",
+   "01–02 章的所有小节和 Boss 都完成"
+  ],
+  "levels": [
+   [
+    1,
+    "新手",
+    0
+   ],
+   [
+    2,
+    "学徒",
+    100
+   ],
+   [
+    3,
+    "熟手",
+    300
+   ],
+   [
+    4,
+    "能手",
+    600
+   ],
+   [
+    5,
+    "高手",
+    1000
+   ],
+   [
+    6,
+    "导师",
+    null
+   ]
+  ],
+  "item_badges": {
+   "01-exp-mem": "skill"
+  }
+ }
+}

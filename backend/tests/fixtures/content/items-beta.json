@@ -1,0 +1,14 @@
+[
+ {
+  "id": "J1-done-a",
+  "page": "J1-1",
+  "type": "done",
+  "max_xp": 10
+ },
+ {
+  "id": "J1-1-quiz-a",
+  "page": "J1-1",
+  "type": "quiz",
+  "max_xp": 10
+ }
+]

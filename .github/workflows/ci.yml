@@ -1,0 +1,111 @@
+name: ci
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres   # 仅 CI 临时容器使用
+          POSTGRES_DB: xiaotuo_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/xiaotuo_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run alembic upgrade head
+      - run: uv run pytest -q
+
+  # 内容检查用仓库内示例课程，不检出外部课程仓库；check_ids 基线在干净检出中不存在，首次运行自动生成
+  content-checks:
+    runs-on: ubuntu-latest
+    env:
+      COURSE_DIR: examples   # 相对仓库根
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: id 只增不删
+        run: python3 scripts/check_ids.py
+      - name: 死链检查
+        run: python3 scripts/check_links.py
+      - name: skill 目录与软链接
+        run: |
+          test "$(readlink .claude/skills/course-authoring)" = "../../.agents/skills/course-authoring"
+          test -f .claude/skills/course-authoring/SKILL.md
+          grep -qx 'name: course-authoring' .agents/skills/course-authoring/SKILL.md
+
+  frontend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      # courses.json 为生成文件（已忽略），测试前先从示例课程生成
+      - run: npm run import
+        env:
+          COURSE_DIR: examples   # 相对仓库根
+      - run: npm test
+
+  # 前端构建与 e2e 使用仓库内示例课程（COURSE_DIR=examples），不依赖外部课程仓库
+  frontend-build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:   # e2e 自动起后端需要
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres   # 仅 CI 临时容器使用
+          POSTGRES_DB: xiaotuo_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      COURSE_DIR: examples   # 相对仓库根
+      # 后端计分清单生成到此（绝对路径），import-course 据此做 id 对照，e2e 起后端时同样使用
+      CONTENT_DIR: ${{ github.workspace }}/frontend/e2e/out/content
+      XT_REQUIRE_ITEMS: "1"
+      # e2e 自动起后端时使用；COOKIE_SECURE、RATELIMIT_MULTIPLIER=20 由 smoke.cjs 自行传入
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/xiaotuo_test
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - uses: astral-sh/setup-uv@v6
+      - name: 从示例课程生成后端计分清单
+        working-directory: backend
+        run: uv run python scripts/build_content.py --src ../examples --out "$CONTENT_DIR"
+      - run: npm run build
+      - run: npm run e2e

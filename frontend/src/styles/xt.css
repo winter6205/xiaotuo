@@ -1,0 +1,330 @@
+/* =========================================================
+   小驼 · 外层（shell）样式  xt.css
+   - 全部类名以 .xt- 开头；不含 body/h1/a/p/* 等元素级全局选择器
+   - 外层不加载 course.css（方案 §7）。下方 :root 变量逐字复制自
+     shared/assets/course.css 的 :root（L6–L18），正式构建由脚本抽取替换
+   ========================================================= */
+:root{
+  --ink:#3b2f4a; --ink2:#5b4d6b; --muted:#8a7a68; --paper:#fff7e8; --white:#fff;
+  --pink:#ff6fa5; --pink-l:#ffe3ee; --pink-d:#d6336c;
+  --yellow:#ffd43b; --yellow-l:#fff1a8;
+  --mint:#3ccf8e; --mint-l:#c9f0dd; --mint-d:#1f9d64;
+  --sky:#4dabf7; --sky-l:#d7f3ff;
+  --lav:#9775fa; --lav-l:#eef0ff;
+  --peach:#ff922b; --peach-l:#fff1e0;
+  --red:#ff6b6b; --red-l:#ffd6d6; --red-d:#e03131; --red-dd:#a61e1e;
+  --bd:2.5px solid var(--ink); --bd3:3px solid var(--ink);
+  --sh:5px 5px 0 var(--ink); --sh-s:3px 3px 0 var(--ink);
+  --r:22px; --r-s:14px;
+  --mono:"JetBrains Mono","Fira Code","DejaVu Sans Mono",Consolas,monospace;
+  --line:#e8d9c4; --soft:#fffaf0;
+  /* 外层辅助文字色：course.css 的 --muted 在白底/纸色底对比度 4.15/3.89，不足 4.5，外层文字改用此值（白底 5.51） */
+  --xt-muted:#776654;
+}
+
+/* ---------- 根容器（挂在 <body class="xt-app"> 上，仅外层页面使用） ---------- */
+.xt-app{margin:0;min-height:100vh;color:var(--ink);
+  font:15px/1.7 "Noto Sans CJK SC","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  background:var(--paper);background-image:radial-gradient(#ffd8a8 1.4px,transparent 1.4px);background-size:26px 26px;
+  -webkit-font-smoothing:antialiased}
+.xt-app *,.xt-app *::before,.xt-app *::after{box-sizing:border-box}
+.xt-app :focus-visible{outline:3px solid #1971c2;outline-offset:2px}
+.xt-sr{position:absolute!important;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+/* ---------- 文字 ---------- */
+.xt-h1{margin:0 0 6px;font-size:30px;line-height:1.3;font-weight:900;letter-spacing:.5px}
+.xt-h2{margin:0 0 12px;font-size:19px;line-height:1.4;font-weight:900}
+.xt-h3{margin:0;font-size:16px;line-height:1.4;font-weight:900}
+.xt-p{margin:0 0 10px;color:var(--ink2)}
+.xt-muted{color:var(--xt-muted);font-size:13px}
+.xt-mono{font-family:var(--mono);font-size:12.5px}
+.xt-link{color:var(--pink-d);font-weight:700;text-decoration:none;border-bottom:2px dotted var(--pink)}
+.xt-link:hover{background:var(--pink-l)}
+.xt-sample{display:inline-flex;align-items:center;gap:4px;padding:0 8px;border:2px dashed var(--peach);border-radius:99px;background:var(--peach-l);color:#b35a00;font-size:12px;font-weight:800;line-height:20px;white-space:nowrap}
+
+/* ---------- 顶栏 ---------- */
+.xt-top{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:12px;padding:10px 24px;background:var(--white);border-bottom:var(--bd3)}
+.xt-logo{display:flex;align-items:center;gap:8px;font-weight:900;font-size:18px;color:var(--ink);text-decoration:none;white-space:nowrap}
+.xt-logo i{font-style:normal;font-size:24px}
+.xt-top-sp{flex:1}
+.xt-nav{display:flex;gap:4px}
+.xt-nav a{padding:5px 12px;border-radius:99px;color:var(--ink2);font-weight:800;font-size:14px;text-decoration:none}
+.xt-nav a:hover{background:var(--pink-l)}
+.xt-nav a[aria-current]{background:var(--ink);color:var(--white)}
+.xt-pill{display:inline-flex;align-items:center;gap:5px;padding:3px 11px;border:var(--bd);border-radius:99px;background:var(--white);font-weight:800;font-size:13.5px;line-height:1.5;white-space:nowrap;color:var(--ink);text-decoration:none}
+.xt-pill--xp{background:var(--yellow-l)}
+.xt-pill--fire{background:var(--peach-l)}
+.xt-pill--lv{background:var(--lav-l)}
+.xt-menu{display:none}
+
+/* ---------- 布局 ---------- */
+.xt-main{max-width:1160px;margin:0 auto;padding:32px 28px 72px}
+.xt-narrow{max-width:460px;margin:0 auto;padding:48px 20px 72px}
+.xt-grid{display:grid;gap:20px}
+.xt-grid--2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.xt-grid--3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.xt-grid--4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.xt-grid--21{grid-template-columns:minmax(0,2fr) minmax(0,1fr)}
+.xt-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.xt-between{justify-content:space-between}
+.xt-stack>*+*{margin-top:14px}
+.xt-section{margin-top:32px}
+.xt-sec-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.xt-sec-h .xt-h2{margin:0}
+
+/* ---------- 卡片 ---------- */
+.xt-card{background:var(--white);border:var(--bd3);border-radius:var(--r);box-shadow:var(--sh);padding:22px}
+.xt-card--flat{box-shadow:var(--sh-s);border:var(--bd);border-radius:var(--r-s);padding:14px 16px}
+.xt-card--tint-pink{background:var(--pink-l)}
+.xt-card--tint-sky{background:var(--sky-l)}
+
+/* ---------- 页首（hero） ---------- */
+.xt-hero{position:relative;display:flex;align-items:center;gap:22px;padding:26px 28px;background:var(--white);border:var(--bd3);border-radius:28px;box-shadow:var(--sh);overflow:hidden}
+.xt-hero::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border-radius:50%;background:var(--yellow-l);z-index:0}
+.xt-hero>*{position:relative;z-index:1}
+.xt-mascot{flex:none;display:grid;place-items:center;width:78px;height:78px;border:var(--bd3);border-radius:50%;background:var(--yellow);font-size:42px;box-shadow:var(--sh-s)}
+.xt-kicker{display:inline-block;margin-bottom:6px;padding:1px 10px;border:2px solid var(--ink);border-radius:99px;background:var(--mint-l);font-size:12.5px;font-weight:800}
+
+/* ---------- 课程卡（首页） ---------- */
+.xt-course{position:relative;display:flex;flex-direction:column;gap:14px;padding:24px;background:var(--white);border:var(--bd3);border-radius:var(--r);box-shadow:var(--sh);transition:transform .15s,box-shadow .15s}
+.xt-course:hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--ink)}
+.xt-course-h{display:flex;gap:14px;align-items:center}
+.xt-course-ic{flex:none;display:grid;place-items:center;width:58px;height:58px;border:var(--bd3);border-radius:18px;font-size:30px}
+/* 课程主题色：卡片 / 课程根节点 style 设 --c（清单 accent，仅用于色块与装饰）；
+   --c-l、--c-d 清单未给 accent_light / accent_dark 时派生。按钮文字与白字色底用 --c-d */
+.xt-course,.xt-badge-group,[data-course-root]{--c-l:color-mix(in srgb,var(--c,#888) 18%,white);--c-d:color-mix(in srgb,var(--c,#888) 60%,black)}
+.xt-course-ic{background:var(--c-l)}
+.xt-course--default{background:linear-gradient(var(--white),var(--white)) padding-box}
+.xt-badge-default{position:absolute;top:-13px;right:20px;padding:2px 12px;border:var(--bd);border-radius:99px;background:var(--pink);color:var(--white);font-size:12.5px;font-weight:900}
+.xt-chips{display:flex;flex-wrap:wrap;gap:6px}
+.xt-chip{padding:1px 9px;border:2px solid var(--line);border-radius:99px;background:var(--soft);font-size:12.5px;font-weight:700;color:var(--ink2)}
+.xt-course-f{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:auto;flex-wrap:wrap}
+
+/* ---------- 按钮 ---------- */
+.xt-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:8px 20px;border:var(--bd3);border-radius:var(--r-s);background:var(--pink);color:var(--ink);font:inherit;font-weight:900;font-size:15px;box-shadow:var(--sh-s);cursor:pointer;text-decoration:none;white-space:nowrap}
+.xt-btn:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 var(--ink)}
+.xt-btn:active{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+.xt-btn--ghost{background:var(--white);color:var(--ink)}
+.xt-btn--mint{background:var(--mint);color:var(--ink)}
+.xt-btn--sm{min-height:34px;padding:3px 12px;font-size:13.5px;border-width:2.5px}
+.xt-btn--block{display:flex;width:100%}
+.xt-btn[disabled]{opacity:.55;cursor:not-allowed;transform:none;box-shadow:var(--sh-s)}
+
+/* ---------- 表单 ---------- */
+.xt-form{display:grid;gap:16px}
+.xt-field{display:grid;gap:6px}
+.xt-label{font-weight:800;font-size:14px}
+.xt-input{width:100%;min-height:46px;padding:10px 14px;border:var(--bd);border-radius:var(--r-s);background:var(--soft);font:inherit;color:var(--ink)}
+.xt-input:focus{outline:none;background:var(--white);box-shadow:0 0 0 4px var(--sky-l);border-color:var(--ink)}
+.xt-input[aria-invalid="true"]{border-color:var(--red-d);background:var(--red-l)}
+.xt-hint{font-size:12.5px;color:var(--xt-muted)}
+.xt-err{font-size:12.5px;color:var(--red-dd);font-weight:700}
+.xt-auth-h{text-align:center;margin-bottom:20px}
+.xt-auth-h .xt-mascot{margin:0 auto 12px}
+.xt-auth-f{margin-top:18px;text-align:center;font-size:14px;color:var(--ink2)}
+.xt-divider{border:0;border-top:2px dashed var(--line);margin:4px 0}
+
+/* ---------- 提示条 ---------- */
+.xt-notice{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border:var(--bd);border-radius:var(--r-s);background:var(--sky-l);font-size:14px;line-height:1.6}
+.xt-notice--ok{background:var(--mint-l)}
+.xt-notice--warn{background:var(--yellow-l)}
+.xt-notice--err{background:var(--red-l)}
+.xt-notice b{display:block}
+.xt-notice-ic{flex:none;font-size:20px;line-height:1.2}
+
+/* ---------- 进度条 ---------- */
+.xt-bar{position:relative;height:14px;border:2px solid var(--ink);border-radius:99px;background:var(--soft);overflow:hidden}
+.xt-bar>span{position:absolute;inset:0 auto 0 0;background:var(--mint);border-right:2px solid var(--ink)}
+.xt-bar--xp>span{background:var(--yellow)}
+.xt-bar--sm{height:10px}
+
+/* ---------- 指标（stat） ---------- */
+.xt-stat{padding:16px 18px;background:var(--white);border:var(--bd3);border-radius:var(--r);box-shadow:var(--sh-s)}
+.xt-stat-l{font-size:13px;font-weight:800;color:var(--ink2)}
+.xt-stat-v{font-size:30px;line-height:1.25;font-weight:900;font-variant-numeric:tabular-nums}
+.xt-stat-v small{font-size:15px;color:var(--xt-muted);font-weight:800}
+.xt-stat-s{font-size:12.5px;color:var(--xt-muted)}
+.xt-stat--xp{background:var(--yellow-l)}
+.xt-stat--lv{background:var(--lav-l)}
+.xt-stat--fire{background:var(--peach-l)}
+.xt-stat--bd{background:var(--mint-l)}
+
+/* ---------- 徽章 ---------- */
+.xt-badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.xt-badge{display:flex;flex-direction:column;align-items:center;gap:2px;padding:12px 8px;border:var(--bd);border-radius:var(--r-s);background:var(--white);text-align:center;font-weight:800;font-size:13.5px;box-shadow:var(--sh-s)}
+.xt-badge i{font-style:normal;font-size:30px;line-height:1.3}
+.xt-badge small{font-size:11.5px;color:var(--xt-muted);font-weight:700}
+.xt-badge--lock{background:var(--soft);box-shadow:none;border-style:dashed;color:var(--xt-muted)}
+.xt-badge-group>.xt-h3{color:var(--c-d)}
+.xt-badge--lock i{filter:grayscale(1);opacity:.4}
+
+/* ---------- 表格（最近活动） ---------- */
+.xt-table-wrap{overflow-x:auto;border:var(--bd);border-radius:var(--r-s);background:var(--white)}
+.xt-table{width:100%;border-collapse:collapse;font-size:13.5px}
+.xt-table th,.xt-table td{padding:9px 12px;text-align:left;border-bottom:2px dashed var(--line);white-space:nowrap}
+.xt-table th{background:var(--soft);font-size:12.5px;color:var(--ink2);font-weight:900}
+.xt-table tr:last-child td{border-bottom:0}
+.xt-table--act .xt-act-import .xt-act-item{white-space:normal}
+.xt-num{text-align:right!important;font-variant-numeric:tabular-nums}
+.xt-kind{display:inline-block;padding:0 8px;border:2px solid var(--ink);border-radius:99px;font-size:11.5px;font-weight:800;line-height:18px}
+.xt-kind--done{background:var(--mint-l)}
+.xt-kind--xp{background:var(--yellow-l)}
+.xt-kind--rec{background:#ececec}
+
+/* ---------- 章节列表 ---------- */
+.xt-chapters{display:grid;gap:12px}
+.xt-chapter{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 16px;background:var(--white);border:var(--bd);border-radius:var(--r-s);box-shadow:var(--sh-s)}
+.xt-chapter-no{display:grid;place-items:center;min-width:46px;height:46px;padding:0 6px;border:var(--bd);border-radius:12px;background:var(--sky-l);font-weight:900;font-family:var(--mono);font-size:14px}
+.xt-chapter--done .xt-chapter-no{background:var(--mint)}
+.xt-chapter-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.xt-chapter-meta .xt-bar{flex:1;min-width:120px;max-width:260px}
+.xt-boss{display:inline-flex;align-items:center;gap:4px;padding:1px 9px;border:2px solid var(--ink);border-radius:99px;font-size:12px;font-weight:800;white-space:nowrap;background:var(--soft)}
+.xt-boss--clear{background:var(--yellow)}
+
+/* 小节列表（目录页） */
+.xt-subs{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:6px}
+.xt-sub{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 12px;border:2px solid var(--line);border-radius:12px;background:var(--soft);color:var(--ink);text-decoration:none;font-weight:700;font-size:14px}
+.xt-sub:hover{border-color:var(--ink);background:var(--pink-l)}
+.xt-sub-st{display:grid;place-items:center;width:24px;height:24px;border:2px solid var(--ink);border-radius:50%;background:var(--white);font-size:12px;font-weight:900}
+.xt-sub--done .xt-sub-st{background:var(--mint);color:var(--white)}
+.xt-sub--part .xt-sub-st{background:var(--yellow-l)}
+.xt-sub--cur{border-color:var(--ink);background:var(--yellow-l)}
+.xt-sub--boss{background:var(--lav-l);border-color:var(--lav)}
+.xt-sub-r{font-size:12.5px;color:var(--xt-muted);font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.xt-details{border:var(--bd3);border-radius:var(--r);background:var(--white);box-shadow:var(--sh-s)}
+.xt-details>summary{list-style:none;cursor:pointer;padding:14px 18px}
+.xt-details>summary::-webkit-details-marker{display:none}
+.xt-details[open]>summary{border-bottom:2px dashed var(--line)}
+.xt-details-b{padding:4px 18px 16px}
+.xt-boss-cta{display:flex;align-items:center;gap:14px;padding:14px 16px;margin-top:12px;border:var(--bd3);border-radius:var(--r-s);background:var(--lav-l);box-shadow:var(--sh-s)}
+.xt-boss-cta .xt-crown{font-size:30px}
+
+/* ---------- 阅读页 ---------- */
+.xt-reader{display:grid;grid-template-columns:280px minmax(0,1fr);gap:28px;max-width:1280px;margin:0 auto;padding:24px 24px 60px}
+.xt-toc{position:sticky;top:76px;align-self:start;max-height:calc(100vh - 96px);overflow:auto;padding:14px 10px;background:var(--white);border:var(--bd3);border-radius:24px;box-shadow:var(--sh);font-size:14px;line-height:1.5}
+.xt-toc-h{display:block;padding:2px 10px 8px;font-weight:900;font-size:16px}
+.xt-toc-a{display:flex;gap:8px;align-items:center;padding:7px 10px;border-radius:12px;color:var(--ink2);font-weight:700;text-decoration:none}
+.xt-toc-a:hover{background:var(--pink-l)}
+.xt-toc-a[aria-current="page"]{background:var(--pink);color:var(--white)}
+.xt-toc-a .xt-tick{margin-left:auto;flex:none;display:grid;place-items:center;width:20px;height:20px;border-radius:50%;background:var(--mint);color:var(--white);font-size:11px;font-weight:900}
+.xt-toc-sub{margin:2px 0 6px 12px;padding-left:8px;border-left:2px dashed var(--line)}
+.xt-toc-sub .xt-toc-a{font-size:13.5px}
+.xt-toc hr{border:0;border-top:2px dashed var(--line);margin:8px 6px}
+.xt-frame-box{position:relative;min-width:0;background:var(--white);border:var(--bd3);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+.xt-frame{display:block;width:100%;min-height:70vh;border:0;background:var(--paper)}
+.xt-frame[data-xt-pending]{visibility:hidden}
+.xt-scrim{position:fixed;inset:0;z-index:55;padding:16px;background:rgba(59,47,74,.45)}
+.xt-scrim[hidden]{display:none}
+.xt-frame-loading{position:absolute;inset:0;display:grid;place-items:center;font-weight:800;color:var(--ink2);pointer-events:none}
+.xt-crumbs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;font-size:13.5px;color:var(--ink2);font-weight:700}
+
+/* ---------- 同步状态 ---------- */
+.xt-sync{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border:var(--bd);border-radius:99px;font-size:13px;font-weight:800;white-space:nowrap;background:var(--white);color:var(--ink)}
+.xt-sync-dot{width:10px;height:10px;border-radius:50%;border:2px solid var(--ink);flex:none}
+.xt-sync--synced .xt-sync-dot{background:var(--mint)}
+.xt-sync--syncing .xt-sync-dot{background:var(--sky);animation:xt-pulse 1s ease-in-out infinite}
+.xt-sync--offline{background:var(--yellow-l)}
+.xt-sync--offline .xt-sync-dot{background:var(--muted)}
+.xt-sync--failed{background:var(--red-l)}
+.xt-sync--failed .xt-sync-dot{background:var(--red)}
+.xt-sync--expired{background:var(--lav-l)}
+.xt-sync--expired .xt-sync-dot{background:var(--lav)}
+.xt-sync--waking{background:var(--sky-l)}
+.xt-sync--waking .xt-sync-dot{background:var(--sky);animation:xt-pulse 1s ease-in-out infinite}
+.xt-banner{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;border-bottom:var(--bd3);font-size:14px;font-weight:700}
+.xt-banner .xt-top-sp{min-width:8px}
+.xt-banner--offline{background:var(--yellow-l)}
+.xt-banner--failed{background:var(--red-l)}
+.xt-banner--expired{background:var(--lav-l)}
+.xt-spinner{width:22px;height:22px;flex:none;border:3px solid var(--sky-l);border-top-color:var(--ink);border-radius:50%;animation:xt-spin .8s linear infinite}
+.xt-boot{display:grid;justify-items:center;gap:14px;padding:34px 22px;text-align:center}
+.xt-boot .xt-mascot{animation:xt-bob 2.4s ease-in-out infinite}
+.xt-steps{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;font-size:12.5px;font-weight:800}
+.xt-step{padding:1px 10px;border:2px solid var(--line);border-radius:99px;background:var(--soft);color:var(--xt-muted)}
+.xt-step--on{border-color:var(--ink);background:var(--sky-l);color:var(--ink)}
+.xt-step--ok{border-color:var(--ink);background:var(--mint-l);color:var(--ink)}
+.xt-state-demo{display:grid;gap:12px}
+.xt-state-tag{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink2);background:var(--soft);border:2px solid var(--line);border-radius:8px;padding:0 6px}
+.xt-mini{border:var(--bd);border-radius:var(--r-s);overflow:hidden;background:var(--white)}
+.xt-mini .xt-top{position:static;padding:8px 14px;border-bottom-width:2.5px}
+
+/* ---------- 页脚 ---------- */
+.xt-foot{max-width:1160px;margin:0 auto;padding:0 28px 32px;color:var(--xt-muted);font-size:12.5px;text-align:center}
+
+@keyframes xt-spin{to{transform:rotate(360deg)}}
+@keyframes xt-pulse{50%{opacity:.35}}
+@keyframes xt-bob{50%{transform:translateY(-5px)}}
+@media (prefers-reduced-motion:reduce){.xt-app *{animation:none!important;transition:none!important}}
+
+/* ---------- 响应式 ---------- */
+@media (max-width:960px){
+  .xt-grid--4{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .xt-grid--3,.xt-grid--21{grid-template-columns:1fr}
+  .xt-reader{grid-template-columns:1fr;gap:14px;padding:14px 12px 48px}
+  .xt-toc{position:fixed;top:0;bottom:0;left:0;z-index:60;width:min(84vw,320px);height:100vh;height:100dvh;max-height:none;border-radius:0 24px 24px 0;border-left:0;transform:translateX(-105%);transition:transform .22s ease;visibility:hidden}
+  .xt-toc[data-open]{transform:none;visibility:visible}
+  .xt-menu{display:inline-flex}
+}
+@media (max-width:720px){
+  .xt-top{padding:8px 12px;gap:8px}
+  .xt-nav{display:none}
+  .xt-logo span{display:none}
+  .xt-pill{padding:2px 8px;font-size:12.5px}
+  .xt-pill .xt-lbl{display:none}
+  .xt-main{padding:20px 14px 56px}
+  .xt-narrow{padding:28px 14px 56px}
+  .xt-grid--2{grid-template-columns:1fr}
+  .xt-grid{gap:14px}
+  .xt-h1{font-size:23px}
+  .xt-hero{flex-direction:column;align-items:flex-start;gap:12px;padding:20px}
+  .xt-mascot{width:60px;height:60px;font-size:32px}
+  .xt-card{padding:18px}
+  .xt-stat{padding:12px 14px}
+  .xt-stat-v{font-size:24px}
+  .xt-chapter{grid-template-columns:auto minmax(0,1fr);gap:10px 12px}
+  .xt-chapter>:last-child{grid-column:1/-1;justify-self:start}
+  .xt-chapter-meta .xt-bar{max-width:none}
+  .xt-banner{padding:8px 12px;font-size:13px}
+  .xt-sub-r .xt-lbl{display:none}
+  /* 最近活动：表格 → 卡片列表 */
+  .xt-table-wrap:has(.xt-table--act){overflow:visible;border:0;background:none}
+  .xt-table--act thead{display:none}
+  .xt-table--act,.xt-table--act tbody{display:block}
+  .xt-table--act tbody{display:grid;gap:8px}
+  .xt-table--act tr{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 10px;align-items:center;padding:10px 12px;background:var(--white);border:var(--bd);border-radius:var(--r-s);box-shadow:var(--sh-s)}
+  .xt-table--act td{padding:0;border:0;white-space:nowrap;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .xt-table--act .xt-act-at{grid-row:1;grid-column:1;color:var(--xt-muted)}
+  .xt-table--act .xt-act-course{grid-row:1;grid-column:2;font-weight:800}
+  .xt-table--act .xt-act-page{grid-row:1;grid-column:3}
+  .xt-table--act .xt-act-kind{grid-row:2;grid-column:1}
+  .xt-table--act .xt-act-item{grid-row:2;grid-column:2;color:var(--ink2)}
+  .xt-table--act .xt-act-amt{grid-row:2;grid-column:3;font-weight:900}
+  .xt-table--act .xt-act-import .xt-act-item{grid-column:1/3}
+}
+
+/* ---------- 追加：等级行 / 危险操作 / 确认弹窗 ---------- */
+.xt-lvrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 6px}
+.xt-btn--danger{background:var(--red-dd);color:#fff}
+.xt-danger-zone{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:16px;padding:12px 14px;border:2.5px dashed var(--red-d);border-radius:var(--r-s);background:var(--red-l)}
+.xt-danger-zone b{color:var(--red-dd)}
+.xt-danger-zone .xt-muted{color:var(--ink2)}
+.xt-dialog{max-width:480px;margin:0 auto;padding:22px;background:var(--white);border:var(--bd3);border-radius:var(--r);box-shadow:var(--sh)}
+.xt-dialog-ic{display:grid;place-items:center;width:52px;height:52px;margin-bottom:10px;border:var(--bd);border-radius:50%;background:var(--red-l);font-size:26px}
+@media (max-width:720px){.xt-danger-zone{flex-direction:column;align-items:flex-start}}
+.xt-btn--danger-ghost{background:var(--white);color:var(--red-dd);border-color:var(--red-dd)}
+.xt-kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin-top:12px;font-size:13.5px}
+.xt-kv span{color:var(--xt-muted)}
+.xt-kv b{text-align:right;font-variant-numeric:tabular-nums}
+.xt-datarow{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:var(--soft)}
+.xt-card .xt-danger-zone{margin-top:28px;flex-direction:column;align-items:stretch}
+.xt-danger-zone .xt-row{gap:8px}
+.xt-dialog .xt-btn{white-space:normal;text-align:center;line-height:1.4}
+.xt-dialog .xt-row{flex-wrap:wrap}
+/* 程序聚焦的页面标题（如登录页 h1）不显示焦点框 */
+h1[tabindex="-1"]:focus{outline:none}
+/* 窄屏（≤720px）Reader：外层卡片贴边，去掉左右内边距、边框与阴影，正文约宽 30px */
+@media (max-width:720px){
+  .xt-reader{padding-left:0;padding-right:0}
+  .xt-reader .xt-crumbs{padding:0 12px}
+  .xt-frame-box{border-left:0;border-right:0;border-radius:0;box-shadow:none}
+}
