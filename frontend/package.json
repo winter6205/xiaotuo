@@ -6,12 +6,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run import && tsc -b && vite build",
+    "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "import": "node scripts/import-course.mjs",
     "test": "vitest run",
-    "gen:api": "npx -y openapi-typescript@7 ${OPENAPI:-../api/openapi.yaml} -o src/lib/api-types.ts",
+    "gen:api": "openapi-typescript ${OPENAPI:-../api/openapi.yaml} -o src/lib/api-types.ts",
     "e2e": "node e2e/smoke.cjs",
     "e2e:content": "node e2e/content-check.cjs"
   },
@@ -26,10 +25,16 @@
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "jsdom": "^29.1.1",
+    "openapi-typescript": "7.13.0",
     "oxlint": "^1.81.0",
     "puppeteer-core": "^24.43.1",
     "typescript": "~6.0.2",
     "vite": "^8.3.0",
     "vitest": "^4.1.12"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
   }
 }

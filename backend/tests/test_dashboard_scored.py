@@ -54,7 +54,7 @@ def test_sample_course_events(user):
 
 def test_static_badges_follow_manifest(user):
     """回归：static 课程的徽章表只含清单声明的徽章（示例课程为 boss01 + grad），不叠加通用徽章（此前显示 x/6）。"""
-    from app.content import courses
+    from xiaotuo.content import courses
     demo = courses()["demo"]
     assert [b[0] for b in demo.all_badges] == ["boss01", "grad"]
     d = user.get("/api/dashboard").json()

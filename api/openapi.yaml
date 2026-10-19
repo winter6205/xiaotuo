@@ -11,6 +11,7 @@ tags:
 - name: auth
 - name: progress
 - name: dashboard
+- name: courses
 - name: ops
 security:
 - sessionCookie: []
@@ -675,6 +676,41 @@ paths:
                 status: degraded
                 db: unavailable
                 version: 0.2.2
+  /api/courses:
+    get:
+      tags:
+      - courses
+      operationId: getCourses
+      summary: 课程目录（运行时从课程目录生成，前端加载闸门使用）
+      description: "服务启动时由内容生成步骤从 COURSE_DIR 写出 catalog.json，进程内缓存，请求时不解析页面。catalog.json 由 xiaotuo.content_build 从各课 course.json 与页面生成；COURSE_DIR 下没有课程时 courses 为空数组。课程内容变化后须重启服务才会刷新。"
+      security:
+      - {}
+      parameters:
+      - name: If-None-Match
+        in: header
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: 课程目录；没有课程时 courses 为空数组
+          headers:
+            ETag:
+              schema:
+                type: string
+              description: '"<version>"'
+            Cache-Control:
+              schema:
+                type: string
+                const: no-cache
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CatalogResponse'
+        '304':
+          description: If-None-Match 命中，目录未变
+        '503':
+          $ref: '#/components/responses/CatalogUnavailable'
   /api/progress/{scope}/reset:
     post:
       tags:
@@ -864,6 +900,15 @@ components:
           example:
             code: email_disabled
             message: 找回密码暂未开放，请联系管理员
+    CatalogUnavailable:
+      description: 课程目录不可用（课程清单校验失败或尚未生成）
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: catalog_unavailable
+            message: 课程目录暂不可用：课程清单校验失败或尚未生成
   schemas:
     CourseCode:
       type: string
@@ -893,6 +938,7 @@ components:
           - email_disabled
           - confirm_required
           - service_unavailable
+          - catalog_unavailable
         message:
           type: string
           description: 可直接展示给学员的中文
@@ -1480,3 +1526,117 @@ components:
             type: string
         email_enabled:
           type: boolean
+    CatalogResponse:
+      type: object
+      required: [version, courses]
+      properties:
+        version:
+          type: string
+          description: 目录版本（catalog 内容 sha256 前 12 位），同时作为 ETag
+        courses:
+          type: array
+          description: 按 order、id 排序；没有课程时为空数组
+          items:
+            $ref: '#/components/schemas/CourseMeta'
+    CourseMeta:
+      type: object
+      description: 一门课的元数据，由 xiaotuo.content_build 从课程清单 course.json 与页面生成，计分项已与计分清单对照
+      required: [id, dir, key, title, name, short, icon, order, accent, accentLight, accentDark, stateVersion, courseId,
+        engine, homeChapter, graduation, total, anchors, pages]
+      properties:
+        id:
+          $ref: '#/components/schemas/CourseCode'
+        dir:
+          type: string
+          description: 课程根目录下的子目录名（只做展示和调试）
+        key:
+          type: string
+          description: localStorage 键：storage_key，缺省为 <id>-v<state_version>
+        title:
+          type: string
+        name:
+          type: string
+        short:
+          type: string
+        icon:
+          type: string
+        order:
+          type: number
+        accent:
+          type: string
+          pattern: ^#[0-9a-fA-F]{6}$
+        accentLight:
+          type: [string, 'null']
+        accentDark:
+          type: [string, 'null']
+        stateVersion:
+          type: integer
+          enum: [1, 2]
+        courseId:
+          type: [string, 'null']
+        engine:
+          type: string
+          enum: [course-manifest-js, static]
+        homeChapter:
+          type: [string, 'null']
+        graduation:
+          type: [array, 'null']
+          items:
+            type: string
+        generated:
+          type: [string, 'null']
+        total:
+          type: integer
+        anchors:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: string
+        pages:
+          type: array
+          items:
+            $ref: '#/components/schemas/CoursePage'
+    CoursePage:
+      type: object
+      required: [id, file, title, xp, sections, boss, ids, subs]
+      properties:
+        id:
+          type: string
+        file:
+          type: string
+        title:
+          type: string
+        xp:
+          type: integer
+        sections:
+          type: array
+          items:
+            type: string
+        boss:
+          type: [string, 'null']
+        ids:
+          type: array
+          description: 计分项（max_xp > 0），已与后端计分清单对照
+          items:
+            type: string
+        subs:
+          type: array
+          items:
+            $ref: '#/components/schemas/CourseSub'
+    CourseSub:
+      type: object
+      required: [key, file, title, ids, boss]
+      properties:
+        key:
+          type: string
+        file:
+          type: string
+        title:
+          type: string
+        ids:
+          type: array
+          items:
+            type: string
+        boss:
+          type: [string, 'null']

@@ -143,7 +143,7 @@ def test_dashboard_empty(user):
 def test_dashboard_tz(user, monkeypatch):
     from datetime import datetime as real_dt, timezone
 
-    from app.routers import dashboard as dash
+    from xiaotuo.routers import dashboard as dash
 
     class FakeDT(real_dt):  # 2026-10-18 17:00 UTC = 2026-10-19 01:00 香港
         @classmethod

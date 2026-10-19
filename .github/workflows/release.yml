@@ -1,0 +1,199 @@
+# Publish to PyPI / TestPyPI with Trusted Publishing (no stored token).
+# Maintained in the private repo and synced to the public repo by scripts/export-oss.sh;
+# publishing only happens for v* tags pushed to the public repo winter6205/xiaotuo.
+#   pre-release tags (e.g. v0.1.0rc1, v0.1.0b1) -> TestPyPI (environment: testpypi)
+#   final tags (e.g. v0.1.0)                   -> PyPI (environment: pypi)
+#   manual run (workflow_dispatch)             -> build, check and smoke only; no publish
+# Only the build job builds. Every later job downloads the same dist artifact and
+# checks its digest before using it. The build job writes the per-file sha256 to the
+# job summary so a downloaded artifact can be matched locally.
+# The private term list never goes to CI; it is scanned before export and locally
+# before approving a publish (scripts/check_dist.py --terms).
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GITLEAKS_VERSION: 8.30.1
+  GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+  UV_VERSION: "0.13.1"
+
+jobs:
+  build:
+    # tags: public repo only; manual runs: any repo (build only)
+    if: github.event_name == 'workflow_dispatch' || github.repository == 'winter6205/xiaotuo'
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.ver.outputs.release }}
+      version: ${{ steps.ver.outputs.version }}
+      prerelease: ${{ steps.ver.outputs.prerelease }}
+      digest: ${{ steps.sums.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # hatch-vcs needs full history and tags; gitleaks scans all commits
+          persist-credentials: false
+
+      - name: Parse tag
+        id: ver
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != push ]; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "manual run: build and check only; hatch-vcs dev version, no tag check"
+            exit 0
+          fi
+          v="${GITHUB_REF_NAME#v}"
+          if ! echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+((a|b|rc)[0-9]+)?$'; then
+            echo "bad tag: $GITHUB_REF_NAME (expected vX.Y.Z or vX.Y.Z(a|b|rc)N)"; exit 1
+          fi
+          if echo "$v" | grep -Eq '(a|b|rc)[0-9]+$'; then pre=true; else pre=false; fi
+          { echo "release=true"; echo "version=$v"; echo "prerelease=$pre"; } >> "$GITHUB_OUTPUT"
+          echo "version $v, pre-release: $pre"
+
+      - name: Secret scan of the source (gitleaks)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/gitleaks.tgz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/gitleaks.tgz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+          "$RUNNER_TEMP/gitleaks" dir . --redact --no-banner
+          "$RUNNER_TEMP/gitleaks" git . --redact --no-banner
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+
+      - name: Prepare frontend build and sample courses
+        run: scripts/prepare_pkg.sh
+
+      - name: Build sdist and wheel
+        working-directory: backend
+        run: uv build --out-dir ../dist
+
+      - name: Check dist (whitelist, version, no .env, no course dirs)
+        env:
+          RELEASE: ${{ steps.ver.outputs.release }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          if [ "$RELEASE" = true ]; then
+            python3 scripts/check_dist.py dist --expect-version "$VERSION"
+          else
+            python3 scripts/check_dist.py dist   # manual run: dev version, not compared with a tag
+          fi
+
+      - name: Record sha256
+        id: sums
+        run: echo "digest=$(python3 scripts/dist_digest.py dist --summary "$GITHUB_STEP_SUMMARY")" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test the installed wheel (bundled samples and --courses ./examples)
+        run: uv run --no-project --python 3.12 python scripts/smoke_wheel.py dist ./examples
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+  smoke-windows:
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - name: Check the artifact digest
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          $actual = uv run --no-project --python 3.12 python scripts/dist_digest.py dist
+          if ($actual -ne $env:DIGEST) { Write-Error "artifact digest does not match the build job"; exit 1 }
+      - name: Smoke test the installed wheel on Windows
+        env:
+          PYTHONIOENCODING: utf-8
+        run: uv run --no-project --python 3.12 python scripts/smoke_wheel.py dist examples
+
+  publish-testpypi:
+    needs: [build, smoke-windows]
+    if: needs.build.outputs.release == 'true' && needs.build.outputs.prerelease == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: testpypi
+      url: https://test.pypi.org/p/xiaotuo
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/dist_digest.py
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - name: Check the artifact digest
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          actual=$(python3 scripts/dist_digest.py dist)
+          [ "$actual" = "$DIGEST" ] || { echo "artifact digest does not match the build job"; exit 1; }
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    needs: [build, smoke-windows]
+    if: needs.build.outputs.release == 'true' && needs.build.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/xiaotuo
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts/dist_digest.py
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: dist
+          path: dist/
+      - name: Check the artifact digest
+        env:
+          DIGEST: ${{ needs.build.outputs.digest }}
+        run: |
+          actual=$(python3 scripts/dist_digest.py dist)
+          [ "$actual" = "$DIGEST" ] || { echo "artifact digest does not match the build job"; exit 1; }
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2

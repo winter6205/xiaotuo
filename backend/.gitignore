@@ -1,0 +1,3 @@
+# Copied by scripts/prepare_pkg.sh before building (see artifacts in pyproject.toml)
+xiaotuo/web/
+xiaotuo/examples/

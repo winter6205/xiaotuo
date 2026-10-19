@@ -1,57 +1,48 @@
 // 冒烟：未登录跳转、注册/字段错误态、首次导入、嵌入样式、做题→事件同步、快照回写、退出确认、手机抽屉
-// 内容：示例课程（COURSE_DIR=examples，课程 id demo，engine static）。课程元数据一律从 src/data/courses.json 读取，不写死
-// 后端：XT_PORT ?? PORT（默认 13773）上不可达时自动在 ../backend 先用 build_content.py 从 COURSE_DIR 生成计分清单到
-//   CONTENT_DIR（默认 e2e/out/content），再执行 uv run python -m app（传 PORT、CONTENT_DIR、COOKIE_SECURE=false、RATELIMIT_MULTIPLIER=20）
+// 内容：示例课程（COURSE_DIR=examples，课程 id demo，engine static）。课程元数据一律从后端 GET /api/courses 读取，不写死
+// 后端：默认由 e2e/backend.cjs 用 CLI 起临时后端（xiaotuo.cli start --courses <COURSE_DIR> --cache-dir <临时目录>，
+//   SQLite 临时库、XIAOTUO_DATA_DIR 临时目录、127.0.0.1 空闲端口或 XT_PORT），跑完按进程组 PID 停止并删除临时目录；
+//   设置 XT_API 时复用已有后端（计分清单目录取 CONTENT_DIR）。前端：XT_URL 未设时自起 vite preview（127.0.0.1:4173，/api、/course 代理到后端）
 // 截图写到 e2e/out/（已忽略）
-const { spawn, spawnSync } = require('node:child_process')
+const { spawn } = require('node:child_process')
 const path = require('node:path')
 const puppeteer = require('puppeteer-core')
-const PORT = process.env.XT_PORT || process.env.PORT || '13773' // 后端端口
-const API = process.env.XT_API || `http://localhost:${PORT}`
-const UI_PORT = 4173
-const BASE = process.env.XT_URL || `http://localhost:${UI_PORT}`
-const BACKEND = path.resolve(__dirname, '../../backend')
-const up = (u) => fetch(u).then((r) => r.ok, () => false)
 const fs = require('node:fs')
-const REPO = path.resolve(__dirname, '../..')
-const OUT = path.resolve(__dirname, 'out')
-const COURSE_DIR = path.resolve(REPO, process.env.COURSE_DIR || 'examples')
-const CONTENT_DIR = path.resolve(BACKEND, process.env.CONTENT_DIR || path.join(OUT, 'content'))
-const COURSES = require('../src/data/courses.json')
-const C = COURSES.find((c) => c.engine === 'static' && c.pages.some((p) => p.boss)) || COURSES[0] // 示例课程
+const { OUT, COURSE_DIR, up, startBackend, fetchCatalog, stopProc } = require('./backend.cjs')
+const UI_PORT = 4173
+const BASE = process.env.XT_URL || `http://127.0.0.1:${UI_PORT}`
+// 后端地址、计分清单目录与课程目录在后端起来后确定（loadCatalog() 从 /api/courses 取得课程）
+let API, CONTENT_DIR
+let COURSES, C, ALL, P0, P1, ID, KEY
 const ITEMS = (c) => Object.fromEntries(JSON.parse(fs.readFileSync(path.join(CONTENT_DIR, `items-${c}.json`), 'utf8')).map((x) => [x.id, x]))
-// 示例课程 item（按规范第 6 节约定的类型从生成物中挑选，不写死 id）
-const ALL = C.pages.flatMap((p) => p.ids)
-const P0 = C.pages[0]; const P1 = C.pages.find((p) => p.boss) || C.pages.at(-1)
-const ID = {
-  quiz: ALL.find((id) => /-quiz-/.test(id)),
-  read0: P0.ids.find((id) => id.endsWith('-done-read')),
-  read1: P1.ids.find((id) => id.endsWith('-done-read')),
-  boss: ALL.filter((id) => P1.boss && id.startsWith(P1.boss + '-')),
+async function loadCatalog() {
+  COURSES = await fetchCatalog(API)
+  C = COURSES.find((c) => c.engine === 'static' && c.pages.some((p) => p.boss)) || COURSES[0] // 示例课程
+  // 示例课程 item（按规范第 6 节约定的类型从目录中挑选，不写死 id）
+  ALL = C.pages.flatMap((p) => p.ids)
+  P0 = C.pages[0]; P1 = C.pages.find((p) => p.boss) || C.pages.at(-1)
+  ID = {
+    quiz: ALL.find((id) => /-quiz-/.test(id)),
+    read0: P0.ids.find((id) => id.endsWith('-done-read')),
+    read1: P1.ids.find((id) => id.endsWith('-done-read')),
+    boss: ALL.filter((id) => P1.boss && id.startsWith(P1.boss + '-')),
+  }
+  ID.q = ID.boss // 队列 / 换账号场景用的计分项（Boss 关卡项）
+  KEY = C.key
 }
-ID.q = ID.boss // 队列 / 换账号场景用的计分项（Boss 关卡项）
 const { checkContent } = require('./content-check.cjs')
 
-async function startBackend() {
-  if (await up(API + '/api/health')) return null
-  const env = { ...process.env, PORT, DATABASE_URL: process.env.DATABASE_URL || 'postgresql+asyncpg://postgres:postgres@localhost:5432/xiaotuo_dev',
-    COURSE_DIR, CONTENT_DIR, COOKIE_SECURE: 'false', RATELIMIT_MULTIPLIER: '20' }
-  spawnSync('uv', ['run', 'python', 'scripts/build_content.py', '--src', COURSE_DIR, '--out', CONTENT_DIR], { cwd: BACKEND, env, stdio: 'inherit' })
-  spawnSync('uv', ['run', 'alembic', 'upgrade', 'head'], { cwd: BACKEND, env, stdio: 'inherit' })
-  const p = spawn('uv', ['run', 'python', '-m', 'app'], { cwd: BACKEND, env, stdio: 'ignore', detached: true })
-  for (let i = 0; i < 100 && !(await up(API + '/api/health')); i++) await sleep(200)
-  return p
-}
-const KEY = C.key
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const blank = (course) => ({ version: C.stateVersion, ...(C.stateVersion === 1 ? { course } : {}), xp: {}, done: {}, rec: {}, solved: {}, fix: {}, streak: { cur: 0, best: 0, last: null }, days: {}, badges: {}, quiet: false, data: {}, sections: {} })
 
 ;(async () => {
-  const be = await startBackend()
-  // 未指定 XT_URL 时自行起 vite preview（/api 代理到 API）
-  const srv = process.env.XT_URL ? null : spawn('npx', ['vite', 'preview', '--port', String(UI_PORT), '--strictPort'], { stdio: 'ignore', env: { ...process.env, XT_API: API }, detached: true })
+  let be
+  try { be = await startBackend(); API = be.api; CONTENT_DIR = be.contentDir; await loadCatalog() } catch (e) { console.log('FAIL 后端 / 课程目录：' + e.message); await be?.stop(); process.exit(1) }
+  // 未指定 XT_URL 时自行起 vite preview（/api、/course 代理到 API）
+  const srv = process.env.XT_URL ? null : spawn('npx', ['vite', 'preview', '--host', '127.0.0.1', '--port', String(UI_PORT), '--strictPort'], { stdio: 'ignore', env: { ...process.env, XT_API: API }, detached: true })
   for (let i = 0; i < 50; i++) { try { await fetch(BASE); break } catch { await sleep(200) } }
   const b = await puppeteer.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox'] })
+    .catch(async (e) => { console.log('FAIL 浏览器启动：' + e.message); stopProc(srv); await be.stop(); process.exit(1) })
   const p = await b.newPage()
   await p.setViewport({ width: 1280, height: 800 })
   const fails = []
@@ -119,7 +110,7 @@ const blank = (course) => ({ version: C.stateVersion, ...(C.stateVersion === 1 ?
     await submit({ em: email, pw, pw2: pw })
     await p.waitForFunction(() => location.pathname === '/dashboard' && document.querySelector('.xt-stat-v'), { timeout: 10000 })
     const first = await api(`/progress/${C.id}`)
-    if (!first?.state) throw new Error(`${API} 上的后端没有课程 ${C.id}：停止该后端，或用 XT_PORT 指向以 COURSE_DIR=${COURSE_DIR} 启动的后端`)
+    if (!first?.state) throw new Error(`${API} 上的后端没有课程 ${C.id}：XT_API 须指向以 --courses ${COURSE_DIR} 启动的后端`)
     console.log(`  课程 ${C.id}（content_version ${first.content_version}）`)
     const dash = await api(`/dashboard?tz=${encodeURIComponent('Asia/Hong_Kong')}`)
     check(dash.summary.xp_total === 10 && first.state.done[ID.read0] === 1, `首次登录 /import 合并本机进度 xp_total=${dash.summary.xp_total}`)
@@ -465,14 +456,15 @@ const blank = (course) => ({ version: C.stateVersion, ...(C.stateVersion === 1 ?
       check(!!ic && ic !== 'rgba(0, 0, 0, 0)', `首页课程卡图标底色由 accent 派生（${ic}）`)
       await ctx3.close()
     }
-    // 16. 阅读页地址批量检查（courses.json 中全部课程；不依赖后端内容）
-    const cc = await checkContent({ browser: b, base: BASE })
+    // 16. 阅读页地址批量检查（/api/courses 中全部课程；教材页由后端从 COURSE_DIR 提供）
+    const cc = await checkContent({ browser: b, base: BASE, courses: COURSES })
     check(!cc.fails.length, `阅读页地址 ${cc.routes} 个外层地址 200、教材页 ${cc.pages} 个及 /course/** 资源 200、旧锚点 ${cc.anchors} 个目标页与锚点元素存在${cc.fails.length ? `（${cc.fails.length} 处问题见上）` : ''}`)
   } catch (e) {
     check(false, '异常: ' + e.message)
   }
   await b.close()
-  // 按进程组结束，避免 npx/uv 的子进程残留占用端口
-  for (const c of [srv, be]) if (c) try { process.kill(-c.pid) } catch { /* 已退出 */ }
+  // 按进程组 PID 结束 vite preview 与后端，并删除后端临时目录（SQLite 库、内容缓存、XIAOTUO_DATA_DIR）
+  stopProc(srv)
+  await be.stop()
   process.exit(fails.length ? 1 : 0)
 })()

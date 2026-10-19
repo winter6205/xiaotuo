@@ -6,6 +6,9 @@ __pycache__/
 node_modules/
 dist/
 
+# coding agent 的本地状态（缓存、会话记忆、机器相关配置）
+.serena/
+
 # 课程衍生数据：由 COURSE_DIR 下的课程生成，不进仓库
 backend/content/
 baseline/course-ids.json

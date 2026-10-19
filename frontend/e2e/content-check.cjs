@@ -1,12 +1,15 @@
 // 阅读页地址批量检查：遍历前端生成的全部阅读页地址（各课章入口页、小节页、单页章 Boss 锚点）
 // - 外层地址 /<课程>/<文件> 返回 200（SPA 回退）
 // - 教材页 /course/<课程>/<文件> 及其加载的 /course/** 资源均 200，页面无 JS 报错
-// - 旧锚点映射（courses.json anchors：目录页#旧锚点 → 小页）目标页存在、锚点元素存在；单页章 Boss 锚点元素存在
-// 用法：被 smoke.cjs 调用；也可单独运行 `npm run e2e:content`（XT_URL 未设时自起 vite preview，不需要后端）
-const courses = require('../src/data/courses.json')
+// - 旧锚点映射（课程目录 anchors：目录页#旧锚点 → 小页）目标页存在、锚点元素存在；单页章 Boss 锚点元素存在
+// 课程列表由调用方传入（GET /api/courses 的 courses）。教材页 /course/** 由后端从课程目录提供，前端构建产物里没有课程。
+// 用法：被 smoke.cjs 调用；也可单独运行 `npm run e2e:content`（先 npm run build）：默认由 e2e/backend.cjs 用 CLI 起临时后端
+//   （--courses <COURSE_DIR，默认 examples>、SQLite 临时库，跑完按 PID 停止并删除临时目录），设置 XT_API 时复用已有后端；
+//   XT_URL 未设时自起 vite preview（127.0.0.1:4174，/api、/course 代理到后端）
 
 const enc = encodeURIComponent
-async function checkContent({ browser, base, log = console.log }) {
+async function checkContent({ browser, base, courses, log = console.log }) {
+  if (!Array.isArray(courses)) throw new Error('checkContent 需要 courses（GET /api/courses 的课程列表）')
   const fails = []
   const fail = (m) => { fails.push(m); log('  ✗ ' + m) }
   // 前端生成的阅读页地址（与 lib/courses.ts readerPath / units / bossTarget 同口径）
@@ -67,13 +70,18 @@ module.exports = { checkContent }
 if (require.main === module) (async () => {
   const { spawn } = require('node:child_process')
   const puppeteer = require('puppeteer-core')
+  const { startBackend, fetchCatalog, stopProc } = require('./backend.cjs')
   const UI_PORT = 4174
-  const base = process.env.XT_URL || `http://localhost:${UI_PORT}`
-  const srv = process.env.XT_URL ? null : spawn('npx', ['vite', 'preview', '--port', String(UI_PORT), '--strictPort'], { stdio: 'ignore', detached: true })
+  const base = process.env.XT_URL || `http://127.0.0.1:${UI_PORT}`
+  let be, courses
+  try { be = await startBackend(); courses = await fetchCatalog(be.api) } catch (e) { console.log('FAIL 后端 / 课程目录：' + e.message); await be?.stop(); process.exit(1) }
+  const srv = process.env.XT_URL ? null : spawn('npx', ['vite', 'preview', '--host', '127.0.0.1', '--port', String(UI_PORT), '--strictPort'], { stdio: 'ignore', env: { ...process.env, XT_API: be.api }, detached: true })
   for (let i = 0; i < 50; i++) { try { await fetch(base); break } catch { await new Promise((r) => setTimeout(r, 200)) } }
-  const browser = await puppeteer.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox'] })
-  let r
-  try { r = await checkContent({ browser, base }) } finally { await browser.close(); if (srv) try { process.kill(-srv.pid) } catch { /* 已退出 */ } }
+  let r, browser
+  try {
+    browser = await puppeteer.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', args: ['--no-sandbox'] })
+    r = await checkContent({ browser, base, courses })
+  } catch (e) { r = { routes: 0, pages: 0, anchors: 0, fails: ['异常: ' + e.message] } } finally { await browser?.close(); stopProc(srv); await be.stop() }
   console.log(`${r.fails.length ? 'FAIL' : 'PASS'} 阅读页地址 ${r.routes} 个、教材页 ${r.pages} 个、旧锚点 ${r.anchors} 个${r.fails.length ? `，${r.fails.length} 处问题` : ''}`)
   process.exit(r.fails.length ? 1 : 0)
 })()

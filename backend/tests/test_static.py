@@ -1,8 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import settings
-from app.main import app
+from xiaotuo.config import settings
+from xiaotuo.main import app
 
 INDEX = "<!doctype html><title>shell</title>"
 COURSE = "<!doctype html><title>教材 00</title>"
@@ -11,13 +11,13 @@ COURSE = "<!doctype html><title>教材 00</title>"
 @pytest.fixture
 def client(tmp_path, monkeypatch):
     (tmp_path / "assets").mkdir()
-    (tmp_path / "assets" / "index-abc123.js").write_text("console.log(1)")
-    (tmp_path / "assets" / "index-abc123.css").write_text("body{}")
+    (tmp_path / "assets" / "index-abc123.js").write_text("console.log(1)", encoding="utf-8")
+    (tmp_path / "assets" / "index-abc123.css").write_text("body{}", encoding="utf-8")
     (tmp_path / "course" / "alpha").mkdir(parents=True)
     (tmp_path / "course" / "alpha" / "00-目录.html").write_text(COURSE, encoding="utf-8")
     (tmp_path / "course" / "alpha" / "index.html").write_text("<p>目录</p>", encoding="utf-8")
-    (tmp_path / "index.html").write_text(INDEX)
-    (tmp_path.parent / "secret.txt").write_text("nope")
+    (tmp_path / "index.html").write_text(INDEX, encoding="utf-8")
+    (tmp_path.parent / "secret.txt").write_text("nope", encoding="utf-8")
     monkeypatch.setattr(settings, "frontend_dist", str(tmp_path))
     return TestClient(app, base_url="https://testserver")
 

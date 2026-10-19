@@ -1,8 +1,8 @@
 import pytest
 
-from app import ratelimit
-from app.config import settings
-from app.errors import ApiError
+from xiaotuo import ratelimit
+from xiaotuo.config import settings
+from xiaotuo.errors import ApiError
 
 
 def test_multiplier_scales_limit(monkeypatch):

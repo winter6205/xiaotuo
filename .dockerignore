@@ -6,8 +6,11 @@
 **/__pycache__
 **/.pytest_cache
 frontend/dist
-frontend/public/course
 frontend/e2e/out
 frontend/e2e/*.png
 baseline
 docs
+backend/xiaotuo/web
+backend/xiaotuo/examples
+dist
+backend/dist

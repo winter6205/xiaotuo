@@ -7,7 +7,7 @@
 ## 项目结构
 
 - `backend/`：FastAPI 后端，Alembic 迁移，pytest 测试。
-- `frontend/`：前端，构建时由 `scripts/import-course.mjs` 导入课程内容。
+- `frontend/`：前端；课程目录运行时从后端 `GET /api/courses` 加载，教材页由后端从课程目录提供（构建不读取课程）。
 - `scripts/`：校验与本地启停脚本。
 - `docs/`：本地运行与部署文档。
 
@@ -22,6 +22,6 @@
 
 ## 提交前检查
 
-- 后端：在 `backend/` 中运行 `uv run pytest -q`（需要可建库的 PostgreSQL）。
-- 前端：在 `frontend/` 中运行 `npm test` 与 `npm run build`（`COURSE_DIR=examples`）。
+- 后端：在 `backend/` 中运行 `uv run pytest -q`（默认用临时 SQLite 库，不需要 PostgreSQL；`XT_TEST_DB=postgres` 时需要可建库的 PostgreSQL）。
+- 前端：在 `frontend/` 中运行 `npm test` 与 `npm run build`（构建不读取课程目录）。内容校验脚本（`scripts/check_ids.py`、`build_content.py` 等）用 `COURSE_DIR=examples`。
 - 涉及构建或 Docker 的改动，须在干净克隆上验证。

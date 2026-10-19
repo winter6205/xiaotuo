@@ -244,6 +244,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/courses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 课程目录（运行时从课程目录生成，前端加载闸门使用）
+         * @description 服务启动时由内容生成步骤从 COURSE_DIR 写出 catalog.json，进程内缓存，请求时不解析页面。catalog.json 由 xiaotuo.content_build 从各课 course.json 与页面生成；COURSE_DIR 下没有课程时 courses 为空数组。课程内容变化后须重启服务才会刷新。
+         */
+        get: operations["getCourses"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/progress/{scope}/reset": {
         parameters: {
             query?: never;
@@ -272,7 +292,7 @@ export interface components {
         CourseCode: string;
         Error: {
             /** @enum {string} */
-            code: "validation_error" | "not_authenticated" | "csrf_failed" | "invalid_credentials" | "email_taken" | "reset_token_invalid" | "rate_limited" | "course_not_found" | "import_course_mismatch" | "payload_too_large" | "internal_error" | "weak_password" | "email_disabled" | "confirm_required" | "service_unavailable";
+            code: "validation_error" | "not_authenticated" | "csrf_failed" | "invalid_credentials" | "email_taken" | "reset_token_invalid" | "rate_limited" | "course_not_found" | "import_course_mismatch" | "payload_too_large" | "internal_error" | "weak_password" | "email_disabled" | "confirm_required" | "service_unavailable" | "catalog_unavailable";
             /** @description 可直接展示给学员的中文 */
             message: string;
             details?: {
@@ -517,6 +537,61 @@ export interface components {
             };
             email_enabled?: boolean;
         };
+        CatalogResponse: {
+            /** @description 目录版本（catalog 内容 sha256 前 12 位），同时作为 ETag */
+            version: string;
+            /** @description 按 order、id 排序；没有课程时为空数组 */
+            courses: components["schemas"]["CourseMeta"][];
+        };
+        /** @description 一门课的元数据，由 xiaotuo.content_build 从课程清单 course.json 与页面生成，计分项已与计分清单对照 */
+        CourseMeta: {
+            id: components["schemas"]["CourseCode"];
+            /** @description 课程根目录下的子目录名（只做展示和调试） */
+            dir: string;
+            /** @description localStorage 键：storage_key，缺省为 <id>-v<state_version> */
+            key: string;
+            title: string;
+            name: string;
+            short: string;
+            icon: string;
+            order: number;
+            accent: string;
+            accentLight: string | null;
+            accentDark: string | null;
+            /** @enum {integer} */
+            stateVersion: 1 | 2;
+            courseId: string | null;
+            /** @enum {string} */
+            engine: "course-manifest-js" | "static";
+            homeChapter: string | null;
+            graduation: string[] | null;
+            generated?: string | null;
+            total: number;
+            anchors: {
+                [key: string]: {
+                    [key: string]: string;
+                };
+            };
+            pages: components["schemas"]["CoursePage"][];
+        };
+        CoursePage: {
+            id: string;
+            file: string;
+            title: string;
+            xp: number;
+            sections: string[];
+            boss: string | null;
+            /** @description 计分项（max_xp > 0），已与后端计分清单对照 */
+            ids: string[];
+            subs: components["schemas"]["CourseSub"][];
+        };
+        CourseSub: {
+            key: string;
+            file: string;
+            title: string;
+            ids: string[];
+            boss: string | null;
+        };
     };
     responses: {
         /** @description 请求格式或字段不合法 */
@@ -617,6 +692,21 @@ export interface components {
                  * @example {
                  *       "code": "email_disabled",
                  *       "message": "找回密码暂未开放，请联系管理员"
+                 *     }
+                 */
+                "application/problem+json": components["schemas"]["Error"];
+            };
+        };
+        /** @description 课程目录不可用（课程清单校验失败或尚未生成） */
+        CatalogUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "code": "catalog_unavailable",
+                 *       "message": "课程目录暂不可用：课程清单校验失败或尚未生成"
                  *     }
                  */
                 "application/problem+json": components["schemas"]["Error"];
@@ -1347,6 +1437,39 @@ export interface operations {
                     "application/json": components["schemas"]["Health"];
                 };
             };
+        };
+    };
+    getCourses: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-None-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 课程目录；没有课程时 courses 为空数组 */
+            200: {
+                headers: {
+                    /** @description "<version>" */
+                    ETag?: string;
+                    "Cache-Control"?: "no-cache";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogResponse"];
+                };
+            };
+            /** @description If-None-Match 命中，目录未变 */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: components["responses"]["CatalogUnavailable"];
         };
     };
     resetProgress: {

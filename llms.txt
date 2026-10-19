@@ -1,14 +1,14 @@
 # 小驼
 
-> 小驼是一个 Agent 学习平台。Agent 调用课程制作 skill（course-authoring），在学习空间里生成互动课程，帮助使用者学习任何主题。后端 FastAPI + PostgreSQL，前端 React，通过 Docker Compose 本地运行；课程内容放在仓库外的课程目录中。
+> 小驼是一个 Agent 学习平台。Agent 调用课程制作 skill（course-authoring），在学习空间里生成互动课程，帮助使用者学习任何主题。后端 FastAPI + SQLAlchemy（async），默认本机 SQLite、可选 PostgreSQL，前端 React；本地运行首选 `uvx xiaotuo start`，Docker Compose 为备选；课程内容放在仓库外的课程目录中。
 
-开始前先读 AGENTS.md。启动：`cp .env.example .env && docker compose up -d --build`，默认加载仓库自带的示例课程 `examples/`。
+开始前先读 AGENTS.md。启动：`uvx xiaotuo start`（默认使用随包的示例课程，数据写入个人数据目录下的 SQLite）。开发或 Docker 方式见 README 的「从源码运行」与 `docs/local-run.md`。
 
 ## 入门
 
-- [README](https://github.com/winter6205/xiaotuo/blob/main/README.md): 平台概览、交给 Agent 的提示词、本地运行
+- [README](https://github.com/winter6205/xiaotuo/blob/main/README.md): 平台概览、交给 Agent 的提示词、安装与运行、用 Docker 运行、从源码运行
 - [AGENTS.md](https://github.com/winter6205/xiaotuo/blob/main/AGENTS.md): coding agent 必须遵守的规则与提交前检查
-- [本地运行](https://github.com/winter6205/xiaotuo/blob/main/docs/local-run.md): Docker Compose 运行、配置项、数据卷隔离、备份与迁移对齐
+- [本地运行](https://github.com/winter6205/xiaotuo/blob/main/docs/local-run.md): Docker Compose 运行、配置项、数据卷隔离、备份与迁移对齐，附录 B 自装 PostgreSQL、附录 C 命令行 + SQLite
 
 ## 课程制作 skill
 

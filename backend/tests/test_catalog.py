@@ -1,4 +1,4 @@
-"""课程自动发现（app/catalog.py）与 build_content.py 的 static 引擎。"""
+"""课程自动发现（xiaotuo/catalog.py）与 build_content.py 的 static 引擎。"""
 import json
 import shutil
 import subprocess
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from app.catalog import CatalogError, discover, storage_key
+from xiaotuo.catalog import CatalogError, discover, storage_key
 from tests.conftest import BACKEND, SAMPLE_ROOT
 
 GOOD = {"schema": 1, "id": "c1", "title": "课程", "order": 1, "accent": "#112233", "state_version": 1,
@@ -76,7 +76,10 @@ def test_symlink_outside_root_rejected(tmp_path):
     outside = mk(tmp_path / "elsewhere", "c", GOOD)
     root = tmp_path / "root"
     root.mkdir()
-    (root / "link").symlink_to(outside)
+    try:
+        (root / "link").symlink_to(outside, target_is_directory=True)
+    except OSError as e:   # Windows 未开开发者模式时普通用户不能建符号链接
+        pytest.skip(f"无法创建符号链接：{e}")
     with pytest.raises(CatalogError, match="课程根之外"):
         discover(root)
 
@@ -84,14 +87,14 @@ def test_symlink_outside_root_rejected(tmp_path):
 def test_build_content_cli_fails_on_bad_catalog(tmp_path):
     mk(tmp_path, "c", {**GOOD, "id": "Bad"})
     r = subprocess.run([sys.executable, str(BACKEND / "scripts" / "build_content.py"), "--src", str(tmp_path),
-                        "--out", str(tmp_path / "out")], capture_output=True, text=True)
+                        "--out", str(tmp_path / "out")], capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 2 and "不符合" in r.stderr and not (tmp_path / "out").exists()
 
 
 def test_static_engine_items(tmp_path):
     out = tmp_path / "out"
     subprocess.run([sys.executable, str(BACKEND / "scripts" / "build_content.py"), "--src", str(SAMPLE_ROOT),
-                    "--out", str(out)], check=True, capture_output=True, text=True)
+                    "--out", str(out)], check=True, capture_output=True, text=True, encoding="utf-8")
     meta = json.loads((out / "courses.json").read_text(encoding="utf-8"))["demo"]
     items = json.loads((out / "items-demo.json").read_text(encoding="utf-8"))
     assert [(i["id"], i["type"], i["max_xp"]) for i in items] == [
@@ -102,7 +105,7 @@ def test_static_engine_items(tmp_path):
     assert meta["pages"]["00"] == {"sections": ["00-done-read"], "boss": None, "graduation": False}
     assert meta["pages"]["01"] == {"sections": ["01-done-read"], "boss": "01-boss", "badge": "boss01"}
     r = subprocess.run([sys.executable, str(BACKEND / "scripts" / "check_content.py"), "--src", str(SAMPLE_ROOT),
-                        "--content", str(out)], capture_output=True, text=True)
+                        "--content", str(out)], capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 0, r.stdout + r.stderr
 
 
@@ -113,5 +116,22 @@ def test_static_engine_rejects_bad_ids(tmp_path):
     page.write_text(page.read_text(encoding="utf-8").replace('data-id="01-quiz-1"', 'data-id="00-done-read"'),
                     encoding="utf-8")
     r = subprocess.run([sys.executable, str(BACKEND / "scripts" / "build_content.py"), "--src", str(root),
-                        "--out", str(tmp_path / "out")], capture_output=True, text=True)
+                        "--out", str(tmp_path / "out")], capture_output=True, text=True, encoding="utf-8")
     assert r.returncode == 2 and "00-done-read" in r.stderr
+
+
+def _script(name, *args):
+    return subprocess.run([sys.executable, str(BACKEND / "scripts" / name), *args], capture_output=True, text=True,
+                          encoding="utf-8")
+
+
+def test_scripts_empty_course_root_needs_allow_empty(tmp_path):
+    """容器入口带 --allow-empty：COURSE_DIR 里没有课程时课程列表为空（[]），而不是启动失败。"""
+    root, out = tmp_path / "courses", tmp_path / "out"
+    root.mkdir()
+    assert _script("build_content.py", "--src", str(root), "--out", str(out)).returncode == 2
+    r = _script("build_content.py", "--allow-empty", "--src", str(root), "--out", str(out))
+    assert r.returncode == 0, r.stderr
+    assert json.loads((out / "catalog.json").read_text(encoding="utf-8"))["courses"] == []
+    assert _script("check_content.py", "--src", str(root), "--content", str(out)).returncode == 2
+    assert _script("check_content.py", "--allow-empty", "--src", str(root), "--content", str(out)).returncode == 0

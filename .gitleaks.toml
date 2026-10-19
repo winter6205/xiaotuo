@@ -1,0 +1,10 @@
+# gitleaks config: default rules, plus an allowance for one fixed placeholder password in tests
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "placeholder password in tests"
+condition = "AND"
+paths = ['''^backend/tests/''']
+regexTarget = "match"
+regexes = ['''wrong-pass-123''']

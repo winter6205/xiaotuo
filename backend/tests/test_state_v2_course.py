@@ -1,5 +1,5 @@
 """state_version 2 的课（测试课程 gamma）：快照无 course 字段、自带徽章与等级、组件徽章、目录首页不参与毕业。"""
-from app.content import Course, courses
+from xiaotuo.content import Course, courses
 from tests.conftest import ev
 from tests.test_import_reset_dashboard import imp
 from tests.test_migrations_and_contract import check

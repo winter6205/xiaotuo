@@ -54,4 +54,4 @@ fi
 
 echo "启动中：http://localhost:$port （Ctrl+C 停止）"
 cd "$root/backend"
-PORT="$port" exec uv run python -m app
+PORT="$port" exec uv run python -m xiaotuo

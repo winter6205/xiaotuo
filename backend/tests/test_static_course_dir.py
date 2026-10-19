@@ -2,8 +2,8 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from app.config import settings
-from app.main import app
+from xiaotuo.config import settings
+from xiaotuo.main import app
 
 
 @pytest.fixture
@@ -11,17 +11,17 @@ def client(tmp_path, monkeypatch):
     dist = tmp_path / "dist"
     (dist / "course" / "alpha").mkdir(parents=True)
     (dist / "course" / "alpha" / "00-a.html").write_text("dist copy", encoding="utf-8")
-    (dist / "index.html").write_text("<!doctype html>shell")
+    (dist / "index.html").write_text("<!doctype html>shell", encoding="utf-8")
     repo = tmp_path / "repo"
     for d in ("alpha", "beta", "gamma", "sample-course"):
         (repo / d / "assets" / "__pycache__").mkdir(parents=True)
         (repo / d / "00-a.html").write_text(f"<p>{d}</p>", encoding="utf-8")
-        (repo / d / "assets" / "course.js").write_text("var x=1")
-        (repo / d / "assets" / "__pycache__" / "x.pyc").write_text("x")
-        (repo / d / "notes.md").write_text("draft")
+        (repo / d / "assets" / "course.js").write_text("var x=1", encoding="utf-8")
+        (repo / d / "assets" / "__pycache__" / "x.pyc").write_text("x", encoding="utf-8")
+        (repo / d / "notes.md").write_text("draft", encoding="utf-8")
         (repo / d / "design").mkdir()
-        (repo / d / "design" / "s.html").write_text("design")
-    (repo / "secret.html").write_text("nope")
+        (repo / d / "design" / "s.html").write_text("design", encoding="utf-8")
+    (repo / "secret.html").write_text("nope", encoding="utf-8")
     monkeypatch.setattr(settings, "frontend_dist", str(dist))
     monkeypatch.setattr(settings, "course_dir", str(repo))
     return TestClient(app, base_url="https://testserver")

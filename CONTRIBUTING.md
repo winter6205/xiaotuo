@@ -13,7 +13,7 @@
 |---|---|
 | Python | 3.12（由 [uv](https://docs.astral.sh/uv/) 管理） |
 | Node.js | 22.12 及以上 |
-| PostgreSQL | 13 及以上（后端测试需要可建库的账号） |
+| PostgreSQL | 13 及以上（可选：只有 `XT_TEST_DB=postgres` 时需要，且账号要能建库） |
 | Docker Compose | v2.17 及以上（仅 Docker 方式运行时需要） |
 
 ```bash
@@ -29,13 +29,16 @@ Windows 上克隆时建议加 `-c core.symlinks=true`，以保留 `.claude/skill
 提交 PR 前在本地通过以下检查（与 CI 一致）：
 
 ```bash
-# 后端：每次运行新建临时库；数据库地址用 TEST_DATABASE_BASE 或 TEST_DATABASE_URL 指定
+# 后端：XT_TEST_DB 选库，默认 sqlite（临时文件库，不需要 PostgreSQL）；CI 两种都跑
 cd backend && uv sync && uv run pytest -q
+# PostgreSQL：每次运行新建临时库；服务器用 TEST_DATABASE_BASE 指定，或用 TEST_DATABASE_URL 指定现成的库
+XT_TEST_DB=postgres uv run pytest -q
 
 # 前端
 cd frontend && npm ci
-COURSE_DIR=examples npm run import && npm test
-COURSE_DIR=examples npm run build
+npm test
+npm run build          # 不需要课程目录；课程目录运行时由后端 GET /api/courses 提供
+npm run e2e            # CLI + 临时 SQLite 起后端，需先 (cd backend && uv sync --frozen)
 
 # 内容检查
 COURSE_DIR=examples python3 scripts/check_ids.py

@@ -1,6 +1,6 @@
 # 写课方法
 
-本节说明一门课从分工到验收的做法。课程以若干自包含 HTML 页面交付，放在 `COURSE_DIR` 下的一个子目录中，由小驼的阅读器（Reader）以 iframe 嵌入。下文只描述仓库当前支持的写法；`course.json` 字段、id 规则细节、`npm run import` 与 `content_version` 见 [integration.md](integration.md)，完整示例见 [walkthrough.md](walkthrough.md)（`examples/sample-course`）。
+本节说明一门课从分工到验收的做法。课程以若干自包含 HTML 页面交付，放在 `COURSE_DIR` 下的一个子目录中，由小驼的阅读器（Reader）以 iframe 嵌入。下文只描述仓库当前支持的写法；`course.json` 字段、id 规则细节、运行时课程目录与 `content_version` 见 [integration.md](integration.md)，完整示例见 [walkthrough.md](walkthrough.md)（`examples/sample-course`）。
 
 ## 1. 角色分工
 
@@ -23,7 +23,7 @@
 
 1. **内容初稿**：协调人下发分工，作者按章写正文与参考资料。
 2. **教学方案**：先设计后实现。方案写明每章、每节的学习目标，题目考点与所在小节，以及每章是否设 Boss 关。
-3. **页面实现**：按第 3–6 小节的写法落地到 HTML。任何页面改动后都要重新运行 `npm run import` 做清单校验（见 [integration.md](integration.md)）。
+3. **页面实现**：按第 3–6 小节的写法落地到 HTML。任何页面改动后都要重新执行完成标准的四步校验（见 SKILL.md 与 [integration.md](integration.md)）。
 4. **预演与验收**：按第 8 小节执行，问题修复后复测，直至全部通过。
 
 ## 3. 分页粒度
@@ -57,7 +57,7 @@
 - 选项和卡片上不出现会泄露答案的序号或提示。
 - 题干与选项中的 `<`、`>` 等字符须做 HTML 转义，避免被当作标签。
 
-如需选择题以外的互动形式，课程可自带页面引擎（`window.Course`，需提供 `state()` 与 `inventory()`），但在接入前必须确认其得分项能通过 `npm run import` 的清单校验；本文档不将其列为现成组件。
+如需选择题以外的互动形式，课程可自带页面引擎（`window.Course`，需提供 `state()` 与 `inventory()`），但在接入前必须确认其得分项能通过 `build_content.py` 与 `check_content.py` 的清单校验；本文档不将其列为现成组件。
 
 ## 5. 小测
 
@@ -79,7 +79,7 @@
 </section>
 ```
 
-规则（以示例引擎与 `import-course.mjs` 为准）：
+规则（以示例引擎与 `backend/xiaotuo/content_build.py` 为准）：
 - Boss 节必须是 `<section id="boss">`，节内不嵌套 `section`；关卡容器为 `div.boss`，`data-id` 取 `<章>-boss`。
 - 每个 `.stage` 是一关，关内全部题目答对即过关；关卡按顺序结算，前一关通过后才记后一关的分；后一关先完成时分数暂缓，前一关通过后自动补记。
 - 计分：每关 20 XP（`boss_stage`），全部通关加 50 XP（`boss_clear`，id 后缀 `-clear`），全程无错再加 30 XP（`boss_perfect`，后缀 `-perfect`）；读完打卡与其他题型默认分别取 `done`、`default`，均为 10 XP。关内题目本身不单独计分。示例引擎把 Boss 分值写死为 20/50/30，使用示例引擎时不要在 `course.json` 的 `xp` 中覆盖 `boss_*`，否则前后端分值不一致。
@@ -92,7 +92,7 @@
 
 ## 8. 预演与验收
 
-1. **清单校验**：每次改动后按顺序执行以下四步，均须返回 0：① `build_content.py` 带 `--write-cache`，为 `course-manifest-js` 引擎的课程生成 `.xiaotuo-inventory.json`（仅此类课程要求本机有 node 与 Chrome；static 课程不调用浏览器、不生成该文件，只要求返回 0）；② 不带该开关再跑一次 `build_content.py`，模拟容器内无浏览器、只读缓存的启动；③ 运行 `check_content.py`；④ 运行 `npm run import` 做前端清单校验。`--src` 指向课程根目录（各门课子目录的上一层），输出目录用临时目录。课程 HTML 或 `assets/course*.js` 任何改动都会使缓存失效，需从第①步重来。同时确认 id 无重复、未删除已有 id。具体命令见 [integration.md](integration.md)。
+1. **清单校验**：每次改动后按顺序执行以下四步，均须返回 0：① `build_content.py` 带 `--write-cache`，为 `course-manifest-js` 引擎的课程生成 `.xiaotuo-inventory.json`（仅此类课程要求本机有 node 与 Chrome；static 课程不调用浏览器、不生成该文件，只要求返回 0）；② 不带该开关再跑一次 `build_content.py`，模拟容器内无浏览器、只读缓存的启动；③ 运行 `check_content.py`；④ 用临时数据目录运行 `xiaotuo start --courses <课程根目录> --no-browser --port 0`（仓库内开发时在 `backend/` 下用 `uv run python -m xiaotuo.cli start …`），等到 `XIAOTUO_READY` 后用 `GET /api/courses` 确认新课程出现、`pages` 数正确，再按 PID 停止进程。`--src` 指向课程根目录（各门课子目录的上一层），输出目录、`--cache-dir` 与数据库都用临时目录。课程 HTML 或 `assets/course*.js` 任何改动都会使缓存失效，需从第①步重来。同时确认 id 无重复、未删除已有 id。具体命令见 [integration.md](integration.md)。
 2. **人工走查**：在 1280 与 390 两种宽度下，通过小驼 Reader 逐页操作：每道题先答错再答对，完成全部打卡，打通 Boss；核对 XP 与预期一致、刷新后进度保留、浏览器控制台无报错。
 3. **交叉通读**：作者互换章节，以初学者视角阅读，记录看不懂处、难度跳跃、重复题与泄露答案的问题，写入验收记录。
 4. **截图审查**：视觉设计检查两种宽度下的横向溢出、长代码换行、触控尺寸与 HTML 转义问题。
@@ -101,7 +101,7 @@
 验收清单：
 - [ ] 每节有练习，每节末有小测；需要的章设有 Boss 关
 - [ ] 每页末尾有读完打卡，页面未自行处理 `.xt-check`
-- [ ] 四步（带 `--write-cache` 的 build、不带开关的 build、check、`npm run import`）均返回 0，id 无重复、无删除
+- [ ] 四步（带 `--write-cache` 的 build、不带开关的 build、check、`xiaotuo start` 后 `/api/courses` 列出新课程且 `pages` 数正确）均通过，id 无重复、无删除
 - [ ] `course-manifest-js` 课程已生成有效的 `.xiaotuo-inventory.json`（static 课程不适用）
 - [ ] XP 实得与预期一致，刷新后保留，控制台无报错
 - [ ] 1280 / 390 无横向溢出，按钮可点

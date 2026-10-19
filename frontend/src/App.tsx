@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { CatalogGate } from './components/CatalogGate'
 import { RequireAuth } from './components/RequireAuth'
 import { Layout } from './components/Layout'
 import { loadSession } from './lib/session'
@@ -12,7 +13,12 @@ import { Toc } from './pages/Toc'
 
 const Private = ({ children }: { children: ReactNode }) => <RequireAuth>{children}</RequireAuth>
 
+/** 课程目录加载闸门放行后才渲染路由；同步与会话随之启动（sync/owner 依赖已载入的目录） */
 export default function App() {
+  return <CatalogGate><Routed /></CatalogGate>
+}
+
+function Routed() {
   useEffect(() => { void loadSession(); return startSync() }, [])
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>

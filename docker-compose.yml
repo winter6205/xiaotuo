@@ -1,6 +1,7 @@
-# 小驼本地运行（Docker）。说明见 docs/local-run.md
-# 独立 compose 项目 xiaotuo：容器名带 xiaotuo- 前缀，数据卷默认 xiaotuo-pgdata（XT_PG_VOLUME 可改），数据库不对宿主暴露端口
-# 注意：-p 不会隔离数据卷名；不要对存有数据的项目执行 docker compose down -v
+# Xiaotuo local run (Docker). See docs/local-run.md.
+# Separate compose project "xiaotuo": container names start with xiaotuo-, the data volume defaults to
+# xiaotuo-pgdata (change it with XT_PG_VOLUME), and the database port is not exposed to the host.
+# Note: -p does not isolate the volume name; never run `docker compose down -v` on a project that holds data.
 name: xiaotuo
 
 services:
@@ -8,7 +9,7 @@ services:
     image: postgres:17
     environment:
       POSTGRES_USER: xiaotuo
-      POSTGRES_PASSWORD: ${XT_DB_PASSWORD:?在 .env 中设置 XT_DB_PASSWORD}
+      POSTGRES_PASSWORD: ${XT_DB_PASSWORD:?set XT_DB_PASSWORD in .env}
       POSTGRES_DB: xiaotuo
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -22,9 +23,10 @@ services:
   app:
     build:
       context: .
-      additional_contexts:
-        # 构建时读取课程目录，生成课程目录数据
-        course: ${CONTENT_HOST_DIR:-./examples}
+      args:
+        # No .git in the image: the version comes from this build arg
+        # (e.g. XT_VERSION=$(git describe --tags --always) docker compose build)
+        XT_VERSION: ${XT_VERSION:-0.0.0+docker}
     depends_on:
       db:
         condition: service_healthy
@@ -33,8 +35,10 @@ services:
       EMAIL_ENABLED: "false"
       COOKIE_SECURE: "false"
       RATELIMIT_MULTIPLIER: ${XT_RATELIMIT_MULTIPLIER:-1}
+      # The image defaults COURSE_DIR to the bundled samples; compose uses the read-only mount below
+      COURSE_DIR: /course
     volumes:
-      # 课程目录只读挂载，应用通过 COURSE_DIR=/course 提供课程页
+      # Course directory, mounted read-only; served via COURSE_DIR=/course
       - ${CONTENT_HOST_DIR:-./examples}:/course:ro
     ports:
       - "127.0.0.1:${XT_PORT:-13773}:13773"
@@ -48,5 +52,5 @@ services:
 
 volumes:
   pgdata:
-    # 数据卷名可配置；默认值兼容已有数据。另起一套环境时务必设置不同的 XT_PG_VOLUME
+    # Configurable volume name; the default keeps existing data. Set a different XT_PG_VOLUME for any extra environment.
     name: ${XT_PG_VOLUME:-xiaotuo-pgdata}

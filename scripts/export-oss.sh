@@ -7,6 +7,8 @@
 #             也可用环境变量 XT_SCAN_TERMS 指定。
 #   提交说明：默认 "Initial open-source release"（首次）或 "Sync from upstream <短哈希>"。
 # 环境变量：XT_OSS_AUTHOR_NAME / XT_OSS_AUTHOR_EMAIL 设置开源仓库的本地提交身份（默认沿用 git 配置）。
+#           XT_SCAN_REGEX 指向仓库外的正则清单（每行一条 ERE，# 开头为注释），用于整词匹配抓不到的
+#           下划线/连字符写法；未设置时只跑内置规则。清单内容不入库、不进 CI、不存 secret。
 #
 # 任一扫描命中即退出码 3，不修改目标目录、不提交。脚本不推送，推送由维护者手动执行。
 set -euo pipefail
@@ -45,7 +47,7 @@ RX_EXCL=(--exclude=export-oss.sh --exclude=uv.lock --exclude=package-lock.json -
 ALLOW='noreply|example\.(com|org)|"a@b\.co"|u:p@ep-x|127\.0\.0\.1|0\.0\.0\.0|"1\.2\.3\.4"|172\.16\.0\.0/12|/mnt/c/\.\.\.'
 scanrx() {
   local name=$1 rx=$2 out
-  out=$(cd "$STAGE" && grep -rnIE "${RX_EXCL[@]}" "$rx" . | grep -viE "$ALLOW" || true)
+  out=$(cd "$STAGE" && grep -rnIE "${RX_EXCL[@]}" -e "$rx" . | grep -viE "$ALLOW" || true)
   if [ -n "$out" ]; then echo "== 命中：$name"; echo "$out" | cut -c1-200; hits=$((hits + 1)); fi
 }
 scanrx "邮箱" '[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}'
@@ -53,8 +55,28 @@ scanrx "个人路径" '/home/[A-Za-z0-9_.-]+|/Users/[A-Za-z0-9_.-]+|/mnt/[a-z]/|
 scanrx "IP 地址" '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b'
 scanrx "私钥" 'BEGIN [A-Z ]*PRIVATE KEY'
 
+# 可选：仓库外的私有正则清单，每行一条 ERE（# 开头为注释、空行跳过），用于 -w 整词匹配抓不到的
+# 下划线写法（grep 把下划线视为单词字符）。规则不进仓库、不进 CI、不存 secret；本脚本不含任何规则示例。
+# 未设置时只跑上面的内置规则。这些规则走 scan()（不排除文件、不过滤占位值），比内置正则更严。
+regex_note="未设置"
+if [ -n "${XT_SCAN_REGEX:-}" ]; then
+  REGEXES=$(realpath "${XT_SCAN_REGEX}")
+  case "$REGEXES" in "$SRC"/*) echo "正则清单不得位于仓库内：$REGEXES" >&2; exit 2 ;; esac
+  [ -s "$REGEXES" ] || { echo "正则清单不存在或为空：$REGEXES" >&2; exit 2; }
+  n=0
+  while IFS= read -r rx || [ -n "$rx" ]; do
+    case "$rx" in ''|'#'*) continue ;; esac
+    n=$((n + 1))
+    # grep 在空文件上：合法模式退出 1，无法编译退出 2
+    rc=0; grep -E -e "$rx" /dev/null >/dev/null 2>&1 || rc=$?
+    [ "$rc" -le 1 ] || { echo "正则清单第 $n 条无法编译：$rx" >&2; exit 2; }
+    scan "外部正则 #$n" -iE -e "$rx"
+  done < "$REGEXES"
+  regex_note="$n 条"
+fi
+
 if [ "$hits" -gt 0 ]; then echo "扫描命中 $hits 类，未提交。" >&2; exit 3; fi
-echo "扫描通过：0 命中"
+echo "扫描通过：0 命中（词表 $(grep -cvE '^$' "$TERMS") 行，外部正则 ${regex_note}）"
 
 if [ -d "$TARGET/.git" ]; then
   [ -z "$(git -C "$TARGET" status --porcelain)" ] || { echo "目标仓库有未提交改动" >&2; exit 2; }

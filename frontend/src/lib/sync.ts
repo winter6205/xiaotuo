@@ -3,7 +3,7 @@ import * as ob from './outbox'
 import { clearCourseLocal, markOwner, ownerDecision, readOwner } from './owner'
 import type { Owner } from './outbox'
 import { ApiError, getSnapshot, importState, postEvents } from './api'
-import { courseById, courseByKey, courses, type Course } from './courses'
+import { courseById, courseByKey, getCourses, type Course } from './courses'
 import { diffState, localDay, parseState, totalXP, type CourseCode, type ProgressEvent } from './state'
 
 export type SyncStatus = 'idle' | 'pending' | 'syncing' | 'offline' | 'error' | 'gave-up' | 'expired'
@@ -143,7 +143,7 @@ export async function writeBack(courseId: string): Promise<void> {
 /** 登录后首次：把本机未登录时的进度经 /import 并集合并到账号，每个账号每门课只做一次 */
 export async function importLocalOnce(userId: number): Promise<number> {
   let n = 0
-  for (const c of courses) {
+  for (const c of getCourses()) {
     const flag = `xt-imported-${userId}-${c.id}`
     const state = parseState(localStorage.getItem(c.key))
     if (localStorage.getItem(flag) || !state || totalXP(state) + Object.keys(state.done).length === 0) continue
@@ -170,6 +170,7 @@ export async function drain(): Promise<number> {
   return pendingCount()
 }
 
+/** 由 App 在课程目录加载闸门放行后调用（课程未载入时 storage 事件无法映射到课程） */
 export function startSync() {
   const onOnline = () => void flush()
   window.addEventListener('storage', onStorage)

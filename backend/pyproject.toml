@@ -1,26 +1,46 @@
+[build-system]
+requires = ["hatchling>=1.27", "hatch-vcs>=0.5"]
+build-backend = "hatchling.build"
+
 [project]
-name = "xiaotuo-backend"
-version = "0.1.0"
+name = "xiaotuo"
+dynamic = ["version"]
+description = "Xiaotuo: a local learning platform for interactive courses made by AI agents, with progress tracking (FastAPI + React)"
+readme = "README.pypi.md"
 license = "MIT"
-description = "小驼 Agent 学习平台后端（FastAPI）"
-readme = "README.md"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
+authors = [{ name = "winter6205" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Web Environment",
+    "Framework :: FastAPI",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Education",
+]
 dependencies = [
+    "aiosqlite>=0.21.0",
     "alembic>=1.20.0",
     "argon2-cffi>=25.1.0",
     "asyncpg>=0.32.0",
     "fastapi>=0.143.3",
+    "platformdirs>=4.3.0",
     "pydantic-settings>=2.16.0",
     "sqlalchemy[asyncio]>=2.1.5",
     "tzdata>=2026.5",
     "uvicorn[standard]>=0.54.0",
 ]
 
-[project.scripts]
-xiaotuo-backend = "xiaotuo_backend:main"
+[project.urls]
+Homepage = "https://github.com/winter6205/xiaotuo"
+Source = "https://github.com/winter6205/xiaotuo"
+Issues = "https://github.com/winter6205/xiaotuo/issues"
 
-["uv_build>=0.13.1,<0.14.0"]
-build-backend = "uv_build"
+[project.scripts]
+xiaotuo = "xiaotuo.cli:main"
 
 [dependency-groups]
 dev = [
@@ -30,8 +50,28 @@ dev = [
     "pyyaml>=6.0.3",
 ]
 
-[tool.uv]
-package = false
+# Version comes from the git tag (v0.1.0rc1 -> 0.1.0rc1). pyproject.toml lives in backend/,
+# the git root is one level up. When the wheel is built from the sdist there is no .git;
+# hatch-vcs then reads the version from PKG-INFO in the sdist.
+[tool.hatch.version]
+source = "vcs"
+raw-options = { root = "..", fallback_version = "0.0.0" }
+
+# xiaotuo/web (frontend build) and xiaotuo/examples (sample courses) are copied by
+# scripts/prepare_pkg.sh before building and are gitignored; artifacts puts them into
+# both the sdist and the wheel. No force-include of ../frontend/dist: uv build makes the
+# sdist first and builds the wheel from the unpacked sdist, where paths outside it are gone.
+# Everything else under xiaotuo/ (migrations with alembic.ini, data/) is packaged as usual.
+[tool.hatch.build]
+artifacts = ["xiaotuo/web/**", "xiaotuo/examples/**"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["xiaotuo", "README.pypi.md", "LICENSE", "pyproject.toml"]
+exclude = ["**/__pycache__", "**/.env", "**/.env.*", "**/node_modules"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["xiaotuo"]
+exclude = ["**/__pycache__", "**/.env", "**/.env.*", "**/node_modules"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

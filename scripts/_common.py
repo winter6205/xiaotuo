@@ -5,7 +5,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
-from app.catalog import CatalogError, course_root, discover  # noqa: E402,F401
+from xiaotuo.catalog import CatalogError, course_root, discover  # noqa: E402,F401
 
 ROOT = course_root()
 

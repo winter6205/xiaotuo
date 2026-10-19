@@ -1,6 +1,6 @@
 # 接入小驼
 
-本节说明一门课程如何被小驼发现、校验、导入和计分。内容以仓库代码的实际行为为准，已知限制列在文末。完整操作示例见 [walkthrough.md](./walkthrough.md)，写课方法见 [authoring-method.md](./authoring-method.md)，视觉约定见 [visual-spec.md](./visual-spec.md)。
+本节说明一门课程如何被小驼发现、校验、在运行时加载和计分。内容以仓库代码的实际行为为准，已知限制列在文末。完整操作示例见 [walkthrough.md](./walkthrough.md)，写课方法见 [authoring-method.md](./authoring-method.md)，视觉约定见 [visual-spec.md](./visual-spec.md)。
 
 ## 1. 目录约定与课程根目录
 
@@ -10,26 +10,26 @@
     course.json        # 课程清单；有此文件即注册为一门课
     00-xxx.html        # 章节页面，必须位于课程目录顶层
     01-xxx.html
-    assets/            # 可选：course.js、course.css、图片等，导入时整体复制
+    assets/            # 可选：course.js、course.css、图片等，运行时由后端从课程目录直接提供
 ```
 
-发现规则（`frontend/scripts/import-course.mjs` 的 `discover()` 与 `backend/app/catalog.py` 的 `discover()` 实现同一规则）：
+发现规则（`backend/xiaotuo/catalog.py` 的 `discover()`；后端脚本、`xiaotuo start` 与容器启动共用）：
 
 - 只遍历 `COURSE_DIR` 的直接子目录，不递归；没有 `course.json` 的子目录被忽略。
 - 子目录按名称排序遍历；课程最终按 `order` 升序、`order` 相同时按 `id` 排序。
-- 前端不跟随符号链接目录；后端拒绝解析后位于课程根目录之外的目录。
-- 一门课都没发现也算校验失败。
+- 子目录可以是符号链接，但解析后必须位于课程根目录之内，否则拒绝。
+- 后端脚本（`build_content.py`、`check_content.py`）一门课都没发现时校验失败；`xiaotuo start` 允许空目录，此时 `/api/courses` 返回空列表。
 
 课程根目录的取值：
 
 | 场景 | 取值 | 依据 |
 |---|---|---|
-| 本地 `npm run import` / `npm run build` | 环境变量 `COURSE_DIR`，默认 `../course-content`（相对仓库根）；体验示例用 `COURSE_DIR=examples` | `import-course.mjs` 第 11 行 |
+| `xiaotuo start` | `--courses` 参数；未给时用随包示例课程（仓库内开发时为仓库根的 `examples/`） | `backend/xiaotuo/cli.py` `_resolve_courses()` |
 | 后端脚本 | `--src` 参数；未给时取 `COURSE_DIR`，再未给时取仓库根同级的 `course-content` | `catalog.py` `course_root()` |
 | 容器内 | `COURSE_DIR=/course`，宿主课程目录只读挂载到 `/course` | `Dockerfile`、`docker-compose.yml` |
-| CI / e2e | `COURSE_DIR=examples`（相对仓库根，即 `examples/sample-course` 的父目录） | `.github/workflows/ci.yml` |
+| CI / e2e | 仓库根的 `examples/`（即 `examples/sample-course` 的父目录）；e2e 以 `xiaotuo start --courses` 启动临时后端 | `.github/workflows/ci.yml`、`frontend/e2e/backend.cjs` |
 
-`CONTENT_HOST_DIR` 只在 docker compose 中使用，表示宿主机上的课程根目录（默认 `./examples`，即仓库自带示例课程），作为构建上下文和 `/course` 的挂载源。前端脚本和后端脚本都不读取它。
+`CONTENT_HOST_DIR` 只在 docker compose 中使用，表示宿主机上的课程根目录（默认 `./examples`，即仓库自带示例课程），作为构建上下文和 `/course` 的挂载源。`xiaotuo start` 和后端脚本都不读取它。前端构建不读取任何课程目录。
 
 课程内容存放在仓库之外，不提交进仓库。
 
@@ -40,7 +40,7 @@
 | 字段 | 类型与约束 | 说明 |
 |---|---|---|
 | `schema` | 固定为 `1` | 清单格式版本 |
-| `id` | 字符串，`^[a-z][a-z0-9_]{0,15}$`，全局唯一 | 用于 URL `/course/<id>/`、导入目录 `public/course/<id>/`、数据库 `course` 列和 API 路径参数 |
+| `id` | 字符串，`^[a-z][a-z0-9_]{0,15}$`，全局唯一 | 用于 URL `/course/<id>/`、数据库 `course` 列和 API 路径参数 |
 | `title` | 非空字符串 | 后端标题，学习中心徽章组标题也使用它 |
 | `order` | 数字 | 首页排序，升序 |
 | `accent` | `#rrggbb` | 课程主色，见第 3 节 |
@@ -154,7 +154,7 @@ Boss 一律由页面标记识别（第 4.2 节），清单中不需要 Boss 字�
 | `<html data-course>` | 等于清单 `course_id`（缺省为课程 `id`） | 快照中的 `course` 字段，`load()` 据此判断是否本课进度 |
 | `<body data-page>` | 本页的章 id（如 `01`） | Boss 通关记录 `cleared.<章 id>` |
 
-漏写时四步校验仍会返回 0，但运行时进度会写入错误的键并被静默丢弃，因此每页都要核对。纯阅读页不带脚本时也保留这三个属性，便于日后加练习。
+漏写时完成标准的四步仍会通过，但运行时进度会写入错误的键并被静默丢弃，因此每页都要核对。纯阅读页不带脚本时也保留这三个属性，便于日后加练习。
 
 最小页面骨架（含一道选择题、一个跟踪项、参考资料、读完打卡）：
 
@@ -192,29 +192,44 @@ Boss 一律由页面标记识别（第 4.2 节），清单中不需要 Boss 字�
 - `<script src="assets/course.js"></script>` 放在 `</main>` 之后、`</body>` 之前；`course.js` 同步执行，放在 `<head>` 中会找不到页面元素。
 - 参考资料等不计分的辅助节不受「每节至少一道小测」约束。
 
-## 5. npm run import
+## 5. 运行时课程目录（xiaotuo start 与 /api/courses）
+
+前端不在构建时打包课程。课程目录与课程页面都在运行时由后端提供：
 
 ```bash
-cd frontend
-export COURSE_DIR=<课程根目录>
-npm run import
+cd backend
+uv run python -m xiaotuo.cli start --courses "$COURSE_DIR" --cache-dir <临时目录>/content \
+  --database-url "sqlite:///<临时目录>/xt.db" --no-browser --port 0
 ```
 
-`npm run build` 会先执行它。脚本行为：
+已安装小驼时用 `xiaotuo start`，参数相同。启动顺序（`backend/xiaotuo/cli.py`）：
 
-1. 发现并校验全部课程清单（第 1、2 节），问题汇总输出后以**退出码 2** 结束：
-   ```
-   课程清单校验失败（COURSE_DIR=…）：
-     - <subdir>/course.json: accent 必须为 #rrggbb
-   ```
-2. 清空并重建 `frontend/public/course/`，把每门课顶层 `*.html` 和 `assets/` 复制到 `public/course/<id>/`。
-3. 按引擎解析章节、计分项与 XP。
-4. 与后端计分清单 `items-<id>.json` 交叉校验：目录为 `backend/<CONTENT_DIR>`，`CONTENT_DIR` 默认 `content`，可设为绝对路径。
-   - 清单存在：页面 id 与清单的差异只能是跟踪项，否则抛出错误 `页面 id 与 items-<id>.json 不一致`（未捕获异常，进程退出码为 1，见第 10 节）。通过后各章 XP 以清单 `max_xp` 为准。
-   - 清单不存在：输出 `WARN 未找到后端计分清单 …，已跳过 id 对照`，继续导入；若设置 `XT_REQUIRE_ITEMS=1`（CI 使用），改为**退出码 2**。
-5. 写出 `frontend/src/data/courses.json`，输出 `imported <id>:<页数> pages, …`。
+1. 确定课程根目录（第 1 节）与内容缓存目录 `--cache-dir`（默认 `<个人数据目录>/content`，个人数据目录可用 `XIAOTUO_DATA_DIR` 指定）。
+2. 在进程内执行内容生成与双向校验，与第 6 节的两个脚本是同一实现（`backend/xiaotuo/content_build.py`）；先清理缓存目录中上次生成的 `items-*.json`、`courses.json`、`catalog.json`。`--no-build` 跳过这一步，直接使用已有缓存。
+3. 迁移数据库（未给 `--database-url` 且未设 `DATABASE_URL` 时为个人数据目录下的 SQLite），监听端口；`--port 0` 取随机空闲端口。
+4. 就绪后打印一行 `XIAOTUO_READY http://127.0.0.1:<端口>/`。打印时 `/api/courses` 已可用。
 
-`public/course/` 与 `src/data/` 均为生成物，已加入 `.gitignore`；运行完成标准写入这两处不算修改仓库。
+任一步失败时打印问题列表并以**退出码 2** 结束，例如：
+
+```
+课程清单有问题：
+- <subdir>/course.json：缺少必填字段 accent
+错误：课程内容生成失败（见上方问题）。…
+```
+
+`GET /api/courses` 返回 `{version, courses}`，不需要登录，带 `ETag`（未变化时返回 304）。`courses` 按 `order`、`id` 排序，每门课的主要字段：
+
+| 字段 | 说明 |
+|---|---|
+| `id`、`key` | 课程 id 与 localStorage 键（`storage_key`） |
+| `title`、`name`、`short`、`icon`、`accent*` | 显示信息 |
+| `engine`、`stateVersion`、`courseId`、`homeChapter`、`graduation` | 清单字段 |
+| `total` | 课程总 XP，以计分清单 `max_xp` 为准 |
+| `pages[]` | 每章一项：`id`、`file`、`title`、`xp`、`sections`、`boss`、`ids`（计分项）、`subs`（小节页） |
+
+字段契约见 `api/openapi.yaml` 的 `CatalogResponse` / `CourseMeta`。课程页面 `/course/<id>/<章节页面>` 与 `/course/<id>/assets/**` 由后端直接读取课程目录提供（只提供顶层 `*.html` 与 `assets/`）。
+
+课程内容修改后需要重启 `xiaotuo start` 才会重新生成目录；页面文件本身改动后立即生效，但计分项变化必须重启。
 
 ## 6. 后端生成与校验
 
@@ -233,12 +248,12 @@ uv run python scripts/check_content.py --src "$COURSE_DIR" --content "$CONTENT_D
 2. 不带开关：模拟容器内无浏览器的情况，只读缓存，用于确认缓存与当前内容一致。
 3. `check_content.py`：items 与页面双向检查。输出中的 items 数包含由跟踪项和 Boss 派生的条目（`<boss>-s1..sN`、`-clear`、`-perfect`），因此可能多于页面交互 id 数。
 
-参数取值：课程根目录按 `--src` → 环境变量 `COURSE_DIR` → 仓库根同级的 `../course-content`（`backend/app/catalog.py` 的 `DEFAULT_ROOT`）的顺序确定。`--out` 不要使用默认值，默认值 `backend/content` 位于仓库内。无 `uv` 时用 `backend/.venv/bin/python` 代替 `uv run python`。
+参数取值：课程根目录按 `--src` → 环境变量 `COURSE_DIR` → 仓库根同级的 `../course-content`（`backend/xiaotuo/catalog.py` 的 `DEFAULT_ROOT`）的顺序确定。`--out` 不要使用默认值，默认值 `backend/content` 位于仓库内。无 `uv` 时用 `backend/.venv/bin/python` 代替 `uv run python`。
 
-- `build_content.py`：生成 `items-<id>.json` 和 `courses.json`；`--out` 默认 `backend/content`（仓库内，已忽略）。清单校验失败或内容问题（id 重复、id 不以章号开头、Boss 无 `.stage`、徽章未定义、计分项 XP 为 0 等）时退出码 2。
+- `build_content.py`：生成 `items-<id>.json`、`courses.json`（后端计分元数据）和 `catalog.json`（`/api/courses` 的内容）；`--out` 默认 `backend/content`（仓库内，已忽略）。清单校验失败或内容问题（id 重复、id 不以章号开头、Boss 无 `.stage`、徽章未定义、计分项 XP 为 0 等）时退出码 2。
 - `check_content.py`：有问题时退出码 2。
-- 两者均不连接数据库。
-- 容器启动（`docker/entrypoint.sh`）依次执行上述两步、`alembic upgrade head`、uvicorn；任一步失败容器即退出。因此课程清单错误或页面与计分项不一致时，容器以退出码 2 退出，可用 `docker compose logs app` 查看。课程更新后重启容器即重新生成。
+- 两者均不连接数据库。实现在 `backend/xiaotuo/content_build.py`，`scripts/` 下的两个文件是命令行薄壳。
+- 容器启动（`docker/entrypoint.sh`）依次执行上述两步、数据库迁移、uvicorn；任一步失败容器即退出。因此课程清单错误或页面与计分项不一致时，容器以退出码 2 退出，可用 `docker compose logs app` 查看。课程更新后重启容器即重新生成。
 
 ## 7. 清单缓存 .xiaotuo-inventory.json
 
@@ -256,20 +271,20 @@ uv run python scripts/build_content.py --src "$COURSE_DIR" --out "$CONTENT_DIR" 
 
 ## 8. content_version
 
-- 由 `build_content.py` 的 `_finish()` 计算：`<id>-<sha256 前 12 位>`，摘要输入为该课计分项列表（id、章、类型、max_xp）、各章元数据（小节、Boss、徽章、是否参与毕业）和 Boss 徽章定义，按键排序后序列化。
+- 由 `backend/xiaotuo/content_build.py` 的 `_finish()` 计算：`<id>-<sha256 前 12 位>`，摘要输入为该课计分项列表（id、章、类型、max_xp）、各章元数据（小节、Boss、徽章、是否参与毕业）和 Boss 徽章定义，按键排序后序列化。
 - 增删或改名计分项、调整 XP、改动 Boss 关数、徽章、`home_chapter` / `graduation_chapters` 都会改变它；只改正文文字、样式、标题不会改变。
 - 后端在就绪检查接口 `GET /api/health/ready` 中返回各课 `content_version`，并随进度快照一起下发，可用于确认线上加载的计分口径。
 
 ## 9. 后端相关约定
 
 - **未知课程**：错误码均为 `course_not_found`（HTTP 404），有三个出口：
-  - 进度相关 API 中课程 id 不在已生成的 `courses.json` 中（`backend/app/routers/progress.py` 的 `course_or_404()`），消息「没有这门课」；
-  - 框架级 404（如路由未匹配）经 `backend/app/errors.py` 的 `http_error_handler` 统一返回，消息「没有这门课」；
-  - 托管前端时，`backend/app/static.py` 第 85 行对未匹配的 `/api/*` 兜底返回，消息「接口不存在」。
+  - 进度相关 API 中课程 id 不在已生成的 `courses.json` 中（`backend/xiaotuo/routers/progress.py` 的 `course_or_404()`），消息「没有这门课」；
+  - 框架级 404（如路由未匹配）经 `backend/xiaotuo/errors.py` 的 `http_error_handler` 统一返回，消息「没有这门课」；
+  - 托管前端时，`backend/xiaotuo/static.py` 第 85 行对未匹配的 `/api/*` 兜底返回，消息「接口不存在」。
 - **数据库 id 约束**：基线迁移 `0001_baseline` 中 `progress_items`、`badge_awards`、`activity_days` 三张表的 `course` 检查约束为 `course ~ '^[a-z][a-z0-9_]{0,15}$'`，与清单 `id` 规则一致；新课程无需新增迁移。
 - **启动 exit 2 的情形**：课程根目录不存在；未发现任何课程；清单不是合法 JSON 或字段校验失败；`id` / `storage_key` 重复；章节文件缺失或不在课程目录顶层；`course-manifest-js` 课程缓存无效且无法运行浏览器；页面计分项问题；items 与页面双向检查不一致。
 
 ## 10. 已知限制
 
-1. 页面 id 与 `items-<id>.json` 不一致时，`npm run import` 抛出未捕获异常，退出码为 1（不是 2），后续会修。
-2. 章节标题（`chapters[].title`）和重复的章 id 只有后端（`build_content.py`）校验，`npm run import` 不检查。
+1. 运行时课程目录只在 `xiaotuo start` 启动时生成；课程计分项、章节或清单变化后须重启进程，`/api/courses` 才会更新。
+2. `engine=course-manifest-js` 课程在没有浏览器的环境中启动时，必须带与当前内容一致的 `.xiaotuo-inventory.json`（第 7 节），否则启动以退出码 2 失败。

@@ -1,19 +1,75 @@
-import data from '../data/courses.json'
 import type { CSSProperties } from 'react'
+import type { components } from './api-types'
 import type { CourseState } from './state'
 
-export interface Sub { key: string; file: string; title: string; ids: string[]; boss: string | null }
-export interface Page { id: string; file: string; title: string; xp: number; sections: string[]; boss: string | null; ids: string[]; subs: Sub[] }
-/** 课程元数据全部来自课程清单 course.json（构建期由 scripts/import-course.mjs 生成 courses.json），代码里不写死任何课程 */
-export interface Course {
-  id: string; dir: string; key: string; title: string; name: string; short: string; icon: string
-  order: number; accent: string; accentLight: string | null; accentDark: string | null
-  stateVersion: 1 | 2; courseId: string | null; engine: 'course-manifest-js' | 'static'
-  homeChapter: string | null; graduation: string[] | null
-  generated: string | null; total: number
-  anchors: Record<string, Record<string, string>>; pages: Page[]
+type S = components['schemas']
+/** 课程元数据全部来自课程清单 course.json，运行时由后端 GET /api/courses 提供（启动时从课程目录生成），代码里不写死任何课程。
+ *  类型由 api/openapi.yaml 生成（npm run gen:api），不手写 */
+export type Course = S['CourseMeta']
+export type Page = S['CoursePage']
+export type Sub = S['CourseSub']
+/** GET /api/courses 响应 */
+export type CatalogResponse = S['CatalogResponse']
+
+/** 目录加载失败：status=0 为网络错误，503 为后端目录不可用（catalog_unavailable） */
+export class CatalogError extends Error {
+  status: number
+  code: string
+  constructor(status: number, code: string, message: string) { super(message); this.status = status; this.code = code }
 }
-export const courses = (data as unknown as Course[]).slice().sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+
+// ---- 模块级缓存：loadCourses() 只请求一次（失败后可重试）；加载完成前同步 getter 返回空 ----
+const URL_COURSES = `${import.meta.env.BASE_URL}api/courses`
+const sortCourses = (list: Course[]) => list.slice().sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+/** 已加载的课程列表（ES 模块活绑定：加载后各处 import 的 courses 同步更新）。函数内读取，不要在模块顶层拷贝 */
+export let courses: Course[] = []
+let version: string | null = null
+let loaded = false
+let pending: Promise<Course[]> | null = null
+
+export const getCourses = () => courses
+export const catalogVersion = () => version
+export const catalogLoaded = () => loaded
+
+async function fetchCatalog(): Promise<Course[]> {
+  let res: Response
+  try {
+    res = await fetch(URL_COURSES, { credentials: 'include', headers: { Accept: 'application/json' } })
+  } catch {
+    throw new CatalogError(0, 'network', '网络不可用，无法加载课程目录')
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { code?: string; message?: string }
+    throw new CatalogError(res.status, err.code ?? 'internal_error', err.message ?? `课程目录加载失败（HTTP ${res.status}）`)
+  }
+  const body = await res.json().catch(() => null) as CatalogResponse | null
+  if (!body || !Array.isArray(body.courses)) throw new CatalogError(res.status, 'bad_response', '课程目录格式不正确')
+  setCourses(body.courses, body.version ?? null)
+  return courses
+}
+
+/** 加载课程目录（模块级缓存）。并发调用共用同一请求；失败时清掉缓存的 Promise，下次调用重新请求。
+ *  force=true 时忽略已加载的结果重新请求（空目录「重新检查」用） */
+export function loadCourses(force = false): Promise<Course[]> {
+  if (pending) return pending // 进行中的请求直接复用（含 force）
+  if (force) loaded = false
+  if (loaded) return Promise.resolve(courses)
+  pending = fetchCatalog().finally(() => { pending = null })
+  return pending
+}
+
+/** 直接写入目录（单测与 loadCourses 内部使用） */
+export function setCourses(list: Course[], v: string | null = null) {
+  courses = sortCourses(list)
+  version = v
+  loaded = true
+}
+
+/** 仅测试用：恢复未加载状态 */
+export function resetCourses() {
+  courses = []; version = null; loaded = false; pending = null
+}
+
 export const courseById = (id?: string) => courses.find((c) => c.id === id)
 /** 课程主题色变量：--c 取 accent（仅用于色块/装饰）；--c-l、--c-d 未在清单给出时由 xt.css 用 color-mix 派生。
  *  按钮文字与白字色底一律用 --c-d。 */

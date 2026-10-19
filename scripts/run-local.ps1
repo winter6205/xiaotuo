@@ -54,4 +54,4 @@ if (-not $SkipBuild) {
 Write-Host "启动中：http://localhost:$Port （Ctrl+C 停止）"
 Set-Location "$root\backend"
 $env:PORT = "$Port"
-uv run python -m app
+uv run python -m xiaotuo

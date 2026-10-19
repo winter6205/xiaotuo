@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { ApiError, confirmPasswordReset, requestPasswordReset } from '../lib/api'
-import { courses } from '../lib/courses'
+import { getCourses } from '../lib/courses'
 import { readOwner } from '../lib/owner'
 import { login, register, useSession } from '../lib/session'
 import { parseState, totalXP } from '../lib/state'
@@ -14,7 +14,7 @@ const pwText = (pw: string, fallback: string) =>
   pw.length < PW_MIN ? `密码至少 ${PW_MIN} 位，当前 ${pw.length} 位。` : pw.length > PW_MAX ? `密码最多 ${PW_MAX} 位。` : fallback
 
 /** 本机有未归属任何账号的课程进度（首次登录会并入） */
-const hasAnonProgress = () => !readOwner() && courses.some((c) => { const s = parseState(localStorage.getItem(c.key)); return !!s && totalXP(s) + Object.keys(s.done).length > 0 })
+const hasAnonProgress = () => !readOwner() && getCourses().some((c) => { const s = parseState(localStorage.getItem(c.key)); return !!s && totalXP(s) + Object.keys(s.done).length > 0 })
 
 function errText(e: unknown): string {
   if (!(e instanceof ApiError)) return '出错了，请稍后再试'

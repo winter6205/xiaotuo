@@ -1,4 +1,4 @@
-from app.config import Settings
+from xiaotuo.config import Settings
 
 
 def test_port_defaults_to_13773(monkeypatch):

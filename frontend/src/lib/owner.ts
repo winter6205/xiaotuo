@@ -1,5 +1,5 @@
 // 课程本地进度（各课清单的 storage_key，iframe 与外壳同源共享）的账号归属，记在 xt-owner
-import { courses } from './courses'
+import { getCourses } from './courses'
 
 const OWNER = 'xt-owner'
 export type OwnerDecision = 'anon' | 'same' | 'other'
@@ -13,6 +13,7 @@ export const markOwner = (uid: number) => localStorage.setItem(OWNER, String(uid
 
 /** 清除本机课程进度与归属标记 */
 export function clearCourseLocal() {
-  for (const c of courses) localStorage.removeItem(c.key)
+  // 惰性读取：目录由加载闸门在渲染前载入，这里不在模块顶层拷贝
+  for (const c of getCourses()) localStorage.removeItem(c.key)
   localStorage.removeItem(OWNER)
 }

@@ -7,21 +7,28 @@ permissions:
   contents: read
 
 jobs:
+  # The full backend suite runs on PostgreSQL and on SQLite (tests/conftest.py picks the DB from XT_TEST_DB and creates a temp DB)
   backend:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [postgres, sqlite]
     services:
       postgres:
         image: postgres:17
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres   # 仅 CI 临时容器使用
+          POSTGRES_PASSWORD: postgres   # throwaway CI container only
           POSTGRES_DB: xiaotuo_test
         ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s
           --health-timeout 5s --health-retries 10
     env:
-      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/xiaotuo_test
+      XT_TEST_DB: ${{ matrix.db }}
+      XT_ENV_FILE: ""
+      DATABASE_URL: ${{ matrix.db == 'postgres' && 'postgresql+asyncpg://postgres:postgres@localhost:5432/xiaotuo_test' || 'sqlite:///xiaotuo-ci.db' }}
     defaults:
       run:
         working-directory: backend
@@ -29,24 +36,108 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --frozen
+      # backend/alembic.ini points at xiaotuo/migrations/; after migrating, models and schema must not differ
       - run: uv run alembic upgrade head
+      - run: uv run alembic check
+      # EncodingWarning as error: reading a text file without an explicit encoding uses the locale
+      # encoding, which is the ANSI code page on Windows (UTF-8 here). Gate it on the Linux job so a
+      # locale-dependent read fails before it reaches backend-windows.
+      - name: uv run pytest -q
+        env:
+          PYTHONWARNDEFAULTENCODING: 1
+        run: uv run pytest -q -W error::EncodingWarning
+
+  # Windows runs SQLite only (a main personal-use case): paths, file locks, subprocess start/stop
+  backend-windows:
+    runs-on: windows-latest
+    env:
+      XT_TEST_DB: sqlite
+      XT_ENV_FILE: ""
+      PYTHONIOENCODING: utf-8
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
       - run: uv run pytest -q
 
-  # 内容检查用仓库内示例课程，不检出外部课程仓库；check_ids 基线在干净检出中不存在，首次运行自动生成
+  # CLI smoke: xiaotuo start builds content, migrates SQLite, listens on 127.0.0.1; checks health and /api/courses (incl. ETag 304)
+  cli-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+        working-directory: backend
+      - name: No arguments (bundled sample courses, data dir in a temp dir)
+        working-directory: backend
+        run: scripts/cli_smoke.sh -- uv run --frozen python -m xiaotuo.cli start --no-browser --host 127.0.0.1 --port 0
+      - name: --courses ./examples (run from the repository root)
+        env:
+          PYTHONPATH: backend
+        run: backend/scripts/cli_smoke.sh -- backend/.venv/bin/python -m xiaotuo.cli start --no-browser --host 127.0.0.1 --port 0 --courses ./examples
+      - name: Empty course root -> /api/courses returns []
+        working-directory: backend
+        run: |
+          mkdir -p "$RUNNER_TEMP/empty-courses"
+          scripts/cli_smoke.sh --expect-courses 0 -- uv run --frozen python -m xiaotuo.cli start --no-browser --port 0 --courses "$RUNNER_TEMP/empty-courses"
+
+  # Docker image: the frontend stage reads no course directory; the backend is installed as a
+  # package and its version comes from XT_VERSION (no .git in the image). After the build the
+  # container runs once on SQLite (no PostgreSQL) with the bundled sample courses.
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image (not pushed)
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then v="${GITHUB_REF_NAME#v}"; else v="0.0.0+g${GITHUB_SHA::7}"; fi
+          echo "XT_VERSION=$v" >> "$GITHUB_ENV"
+          docker build --build-arg XT_VERSION="$v" -t "xiaotuo-ci:${GITHUB_RUN_ID}" .
+      - name: Version and bundled sample courses in the image
+        run: |
+          img="xiaotuo-ci:${GITHUB_RUN_ID}"
+          got=$(docker run --rm --entrypoint python "$img" -c "import importlib.metadata as m; print(m.version('xiaotuo'))")
+          echo "version in image: $got"
+          [ "$got" = "$XT_VERSION" ]
+          docker run --rm --entrypoint sh "$img" -c 'test "$COURSE_DIR" = /app/examples && ls /app/examples/*/course.json'
+      - name: Run the container on SQLite and check the API
+        run: |
+          docker run -d --name xiaotuo-ci -p 127.0.0.1:13773:13773 \
+            -e DATABASE_URL=sqlite:////tmp/xiaotuo-ci.db "xiaotuo-ci:${GITHUB_RUN_ID}"
+          ok=0
+          for _ in $(seq 1 60); do
+            if [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:13773/api/health/ready)" = 200 ]; then ok=1; break; fi
+            sleep 1
+          done
+          [ "$ok" = 1 ] || { docker logs xiaotuo-ci; exit 1; }
+          curl -fsS http://127.0.0.1:13773/api/health/ready
+          echo
+          curl -fsS http://127.0.0.1:13773/api/courses \
+            | python3 -c 'import json,sys; c=json.load(sys.stdin)["courses"]; assert c, "no courses"; print("courses:", [x["id"] for x in c])'
+          [ "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:13773/)" = 200 ]
+      - name: Clean up
+        if: always()
+        run: docker rm -f xiaotuo-ci >/dev/null 2>&1 || true
+
+  # Content checks use the repository's sample courses, no external course repo; the check_ids baseline
+  # does not exist in a clean checkout and is generated on the first run
   content-checks:
     runs-on: ubuntu-latest
     env:
-      COURSE_DIR: examples   # 相对仓库根
+      COURSE_DIR: examples   # relative to the repository root
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: id 只增不删
+      - name: Ids are only added, never removed
         run: python3 scripts/check_ids.py
-      - name: 死链检查
+      - name: Dead link check
         run: python3 scripts/check_links.py
-      - name: skill 目录与软链接
+      - name: Skill directory and symlink
         run: |
           test "$(readlink .claude/skills/course-authoring)" = "../../.agents/skills/course-authoring"
           test -f .claude/skills/course-authoring/SKILL.md
@@ -65,33 +156,14 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      # courses.json 为生成文件（已忽略），测试前先从示例课程生成
-      - run: npm run import
-        env:
-          COURSE_DIR: examples   # 相对仓库根
+      # Unit tests use synthetic data and a mocked fetch; no course directory needed
       - run: npm test
 
-  # 前端构建与 e2e 使用仓库内示例课程（COURSE_DIR=examples），不依赖外部课程仓库
+  # The frontend build reads no course directory (the catalog comes from GET /api/courses at runtime).
+  # e2e uses the sample courses: e2e/backend.cjs starts the backend via the CLI (python -m xiaotuo.cli start)
+  # on a temp SQLite database; no PostgreSQL needed.
   frontend-build:
     runs-on: ubuntu-latest
-    services:
-      postgres:   # e2e 自动起后端需要
-        image: postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres   # 仅 CI 临时容器使用
-          POSTGRES_DB: xiaotuo_test
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U postgres" --health-interval 5s
-          --health-timeout 5s --health-retries 10
-    env:
-      COURSE_DIR: examples   # 相对仓库根
-      # 后端计分清单生成到此（绝对路径），import-course 据此做 id 对照，e2e 起后端时同样使用
-      CONTENT_DIR: ${{ github.workspace }}/frontend/e2e/out/content
-      XT_REQUIRE_ITEMS: "1"
-      # e2e 自动起后端时使用；COOKIE_SECURE、RATELIMIT_MULTIPLIER=20 由 smoke.cjs 自行传入
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/xiaotuo_test
     defaults:
       run:
         working-directory: frontend
@@ -103,9 +175,14 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
+      - name: api-types matches openapi.yaml
+        run: npm run gen:api && git diff --exit-code src/lib/api-types.ts
+      - name: Build (no course directory set)
+        run: npm run build
+      - name: Build output contains no courses
+        run: test -f dist/index.html && test ! -e dist/course
       - uses: astral-sh/setup-uv@v6
-      - name: 从示例课程生成后端计分清单
+      - run: uv sync --frozen
         working-directory: backend
-        run: uv run python scripts/build_content.py --src ../examples --out "$CONTENT_DIR"
-      - run: npm run build
+      # Smoke and reader URL checks: the backend listens on a free 127.0.0.1 port and is stopped by PID afterwards
       - run: npm run e2e

@@ -2,11 +2,11 @@
 
 云端部署见 `deploy.md`。
 
-主线：用 Docker Compose 在 WSL 中运行应用与 PostgreSQL，浏览器在 Windows 侧访问 `http://localhost:13773`。WSL 内不需要安装 Node、uv 或 PostgreSQL。不使用 Docker 时见附录 B。
+主线：用 Docker Compose 在 WSL 中运行应用与 PostgreSQL，浏览器在 Windows 侧访问 `http://localhost:13773`；这条路线 WSL 内不需要安装 Node、uv 或 PostgreSQL。个人单机使用不必用 Docker：命令行启动 `xiaotuo start` 即可，默认数据库是本机 SQLite，见附录 C；要在 WSL 内自装 PostgreSQL 运行见附录 B。安装与启动（`uvx` / `uv tool install` / `pipx`）见根目录 README 的「安装与运行」。
 
 ## 1. 前提
 
-- Docker Desktop（启用 WSL 集成）或 WSL 内的 Docker Engine，Compose 需 v2.17 及以上（`docker compose version` 核对；`additional_contexts` 从该版本起支持）。
+- Docker Desktop（启用 WSL 集成）或 WSL 内的 Docker Engine，Compose v2（`docker compose version` 核对）。
 - 目录：仓库放在 WSL 文件系统内（不要放在 `/mnt/c`、`/mnt/e` 下，挂载与构建会明显变慢）。
 - 课程目录：默认使用仓库自带的 `./examples`；加载自己的课程时，修改 `.env` 中的 `CONTENT_HOST_DIR` 为宿主上的课程根目录（相对路径按仓库根解析）。
 
@@ -28,7 +28,7 @@ docker compose up -d --build
 |---|---|---|
 | `XT_DB_PASSWORD` | 无，必填 | 数据库密码，仅容器之间使用 |
 | `XT_PORT` | `13773` | 宿主访问端口，只绑定 `127.0.0.1` |
-| `CONTENT_HOST_DIR` | `./examples` | 课程目录路径（其下每个带 manifest 的子目录注册为一门课程），构建时读取，运行时只读挂载 |
+| `CONTENT_HOST_DIR` | `./examples` | 课程目录路径（其下每个带 manifest 的子目录注册为一门课程），运行时只读挂载到 `/course`，构建不读取 |
 | `XT_RATELIMIT_MULTIPLIER` | `1` | 限流阈值倍数，反复跑 e2e 时设为 20 |
 | `XT_PG_VOLUME` | `xiaotuo-pgdata` | PostgreSQL 数据卷名；同一台机器另起一套环境时必须设置不同的值 |
 
@@ -52,7 +52,7 @@ docker compose up -d --build
 | 拉取新代码后更新 | `git pull && docker compose up -d --build`（迁移在启动时自动执行） |
 | 进入数据库 | `docker compose exec db psql -U xiaotuo xiaotuo` |
 
-教材页（`/course/**`）运行时直接读取只读挂载的课程仓库，修改教材 HTML 后刷新浏览器即可生效。`COURSE_DIR=/course` 下每个含 `course.json` 的直接子目录注册为一门课程，字段说明见 README 与 `examples/sample-course`。容器每次启动时先从课程目录生成计分清单并做双向校验，再执行迁移；前端目录数据在镜像构建时生成。因此新增课程、调整页面结构或 `course.json` 变化时，执行 `docker compose up -d --build`。清单无效、`id` 或 `storage_key` 重复、需浏览器解析的课程缺少有效的 `.xiaotuo-inventory.json` 时，构建或启动以退出码 2 失败并列出问题（`docker compose logs app` 查看）。默认即使用示例课程 `CONTENT_HOST_DIR=./examples`。
+教材页（`/course/**`）运行时直接读取只读挂载的课程仓库，修改教材 HTML 后刷新浏览器即可生效。`COURSE_DIR=/course` 下每个含 `course.json` 的直接子目录注册为一门课程，字段说明见 README 与 `examples/sample-course`。容器每次启动时先从课程目录生成计分清单与课程目录数据（`GET /api/courses`）并做双向校验，再执行迁移；镜像构建不读取课程目录。因此新增课程、调整页面结构或 `course.json` 变化时，执行 `docker compose restart app` 即可，不需要重新构建。清单无效、`id` 或 `storage_key` 重复、需浏览器解析的课程缺少有效的 `.xiaotuo-inventory.json` 时，启动以退出码 2 失败并列出问题（`docker compose logs app` 查看）。默认即使用示例课程 `CONTENT_HOST_DIR=./examples`。
 
 ## 6. 备份、恢复与清空
 
@@ -74,8 +74,8 @@ docker compose exec -T db pg_restore -U xiaotuo -d xiaotuo --clean --if-exists <
 
 ## 7. 常见问题
 
-- 构建报 `additional_contexts` 不支持或找不到 `course`：Compose 版本低于 v2.17，或 `CONTENT_HOST_DIR` 路径不存在。
-- 构建在 `npm run build` 失败并提示 id 不一致：课程目录在构建后被修改，重新执行 `docker compose up -d --build`。
+- 启动报找不到课程目录：`CONTENT_HOST_DIR` 路径不存在，或未在仓库根执行 compose。
+- 镜像内的版本号：构建时用 `XT_VERSION=<版本> docker compose build` 传入，未传时为 `0.0.0+docker`（`/api/health/ready` 的 `version` 字段）。
 - `app` 反复重启：compose 的重启策略为 `unless-stopped`，启动失败会持续重启，不影响数据。用 `docker compose logs app` 查看原因：日志含「没有有效的 .xiaotuo-inventory.json」时，在装有 node 与 Chrome 的环境对该课程运行 `build_content.py --write-cache` 后再启动；清单无效或 id 重复时按日志修正 `course.json`；其余多为迁移失败；修改过 `XT_DB_PASSWORD` 而数据卷是旧密码初始化的，也会认证失败（数据库密码只在数据卷首次创建时生效），改回原密码，或备份后 `down -v` 重建。
 - 端口占用（`bind: address already in use`）：修改 `.env` 中的 `XT_PORT` 后 `docker compose up -d`。
 - 登录后立即掉线：浏览器经 https 代理或非 localhost 访问时 cookie 行为不同，本地请直接用 `http://localhost:<端口>`。
@@ -172,9 +172,9 @@ scripts/run-local.sh
 - Windows 浏览器打不开 `localhost:13773`，而 WSL 内 `curl localhost:13773/api/health` 正常：WSL 的 localhost 转发失效。先 `wsl --shutdown` 后重开；仍不行时用 WSL 的 IP（`hostname -I`）访问，并以 `HOST=0.0.0.0 scripts/run-local.sh` 启动。
 - 登录后立即掉线：`COOKIE_SECURE` 未设为 `false`。
 - 注册或登录返回 429：同一后端进程一小时内请求过多（失败也计数）。重启后端即可清零；反复跑 e2e 时把 `RATELIMIT_MULTIPLIER` 设为 20。
-- 本地跑后端测试（`uv run pytest`）：测试默认每次新建临时库 `xiaotuo_test_<pid>`，需要建库权限。执行 `sudo -u postgres psql -c "ALTER USER xiaotuo CREATEDB;"`；或先建好专用库并设置 `TEST_DATABASE_URL` 指向它。日常使用应用不需要这一步。
+- 本地跑后端测试（`uv run pytest`）：默认用临时 SQLite 文件库，不需要 PostgreSQL。`XT_TEST_DB=postgres uv run pytest` 时每次新建临时库 `xiaotuo_test_<pid>`，需要建库权限。执行 `sudo -u postgres psql -c "ALTER USER xiaotuo CREATEDB;"`；或先建好专用库并设置 `TEST_DATABASE_URL` 指向它。日常使用应用不需要这一步。
 - 拉取新代码后：后端 `uv sync` 与 `uv run alembic upgrade head`，前端 `npm ci`。
-- 迁移前先备份（开源前内部版本的库对齐方式：`uv run alembic stamp --purge 0001_baseline`，见 `backend/migrations/versions/0001_baseline.py`）。备份：`pg_dump -h localhost -U xiaotuo -Fc xiaotuo > xiaotuo-$(date +%F).dump`，恢复用 `pg_restore -h localhost -U xiaotuo -d xiaotuo --clean xiaotuo-<日期>.dump`。
+- 迁移前先备份（开源前内部版本的库对齐方式：`uv run alembic stamp --purge 0001_baseline`，见 `backend/xiaotuo/migrations/versions/0001_baseline.py`）。备份：`pg_dump -h localhost -U xiaotuo -Fc xiaotuo > xiaotuo-$(date +%F).dump`，恢复用 `pg_restore -h localhost -U xiaotuo -d xiaotuo --clean xiaotuo-<日期>.dump`。
 - 清空本地数据：`sudo -u postgres psql -c "DROP DATABASE xiaotuo;"`，再执行B.3.1 节建库命令，然后重跑脚本。
 
 ## 附录 A：仓库在 Windows 侧（PowerShell）
@@ -189,3 +189,31 @@ scripts/run-local.sh
    2. NAT 模式（默认）：`postgresql.conf` 设 `listen_addresses = '*'`，`pg_hba.conf` 加 `host xiaotuo xiaotuo 0.0.0.0/0 scram-sha-256`，重启服务。WSL 默认 `peer` 认证仅适用于 Unix socket。
    3. localhost 转发失效：`DATABASE_URL` 中改用 WSL 的 IP（`hostname -I`，重启后可能变化），`pg_hba.conf` 放行该网段（如 `172.16.0.0/12`）。
    4. 仍不通：`%UserProfile%\.wslconfig` 的 `[wsl2]` 下设 `networkingMode=mirrored`（Windows 11 22H2 及以上），`wsl --shutdown` 后重开，`pg_hba.conf` 放行 `127.0.0.1/32`。
+
+## 附录 C：命令行启动（SQLite，不装数据库）
+
+个人单机使用：数据存在本机 SQLite 文件里，不需要 Docker 或 PostgreSQL。仓库内（`backend/` 下，已 `uv sync`）：
+
+```bash
+uv run python -m xiaotuo.cli start                      # 默认示例课程，打开浏览器
+uv run python -m xiaotuo.cli start --courses ~/my-courses --port 13773
+```
+
+启动时依次：生成课程内容（计分清单与课程目录 `catalog.json`）并校验 → 迁移数据库 → 监听端口 → 输出 `XIAOTUO_READY http://127.0.0.1:<端口>/` 并打开浏览器。端口能连上时 `/api/courses` 已可用。
+
+| 参数 | 默认 | 说明 |
+|---|---|---|
+| `--courses <目录>` | 随包示例课程（仓库内为 `examples/`） | 课程根目录，每门课一个含 `course.json` 的子目录；为空时课程列表为 `[]` |
+| `--cache-dir <目录>` | `<个人数据目录>/content` | 生成内容的存放目录 |
+| `--build` / `--no-build` | `--build` | `--no-build` 直接使用已生成的内容 |
+| `--host` | `127.0.0.1` | 回环地址时自动 `COOKIE_SECURE=false`；其他地址保留 Secure Cookie 并警告（需 HTTPS 反代） |
+| `--port` | `13773` | `0` 为随机空闲端口（实际地址见就绪行） |
+| `--no-browser` | — | 就绪后不打开浏览器 |
+| `--database-url <URL>` | 环境变量 `DATABASE_URL`，再否则 `<个人数据目录>/xiaotuo.db` | 接受 `sqlite:///路径` 与 `postgresql://…` |
+| `--env-file <文件>` | 不读 | 默认**不读**当前目录的 `.env`，需要时显式指定 |
+
+个人数据目录：Linux `~/.local/share/xiaotuo`，macOS `~/Library/Application Support/xiaotuo`，Windows `%LOCALAPPDATA%\xiaotuo`；环境变量 `XIAOTUO_DATA_DIR` 可改。同时给出 `--database-url`（或 `DATABASE_URL`）与 `--cache-dir` 时不会在个人数据目录里创建任何文件。
+
+`engine=course-manifest-js` 的课程须自带与当前内容一致的 `.xiaotuo-inventory.json`（在课程仓库里用 `build_content.py --write-cache` 生成并提交），否则启动报错退出。
+
+清理旧的进度事件日志（逐题进度不受影响）：`uv run python -m xiaotuo.cli purge-events --older-than-days 180 [--dry-run]`。

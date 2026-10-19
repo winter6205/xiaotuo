@@ -1,7 +1,7 @@
 import pytest
 
-from app.config import settings
-from app.routers import auth as auth_router
+from xiaotuo.config import settings
+from xiaotuo.routers import auth as auth_router
 from tests.conftest import Api
 
 PW = "correct-horse-battery"

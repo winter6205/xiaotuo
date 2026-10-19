@@ -1,0 +1,59 @@
+[
+ {
+  "id": "demo",
+  "dir": "sample-course",
+  "key": "demo-v1",
+  "title": "示例课程",
+  "name": "示例课程",
+  "short": "示例",
+  "icon": "📘",
+  "order": 10,
+  "accent": "#4dabf7",
+  "accentLight": null,
+  "accentDark": null,
+  "stateVersion": 1,
+  "courseId": null,
+  "engine": "static",
+  "homeChapter": "00",
+  "graduation": [
+   "01"
+  ],
+  "generated": null,
+  "total": 130,
+  "anchors": {},
+  "pages": [
+   {
+    "id": "00",
+    "file": "00-开始.html",
+    "title": "开始",
+    "xp": 10,
+    "sections": [
+     "00-done-read"
+    ],
+    "boss": null,
+    "ids": [
+     "00-done-read"
+    ],
+    "subs": []
+   },
+   {
+    "id": "01",
+    "file": "01-基础.html",
+    "title": "基础",
+    "xp": 120,
+    "sections": [
+     "01-done-read"
+    ],
+    "boss": "01-boss",
+    "ids": [
+     "01-quiz-1",
+     "01-done-read",
+     "01-boss-s1",
+     "01-boss-clear",
+     "01-boss-perfect"
+    ],
+    "subs": []
+   }
+  ]
+ }
+]
